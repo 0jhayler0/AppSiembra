@@ -1,5 +1,123 @@
+:root{
+  --border-size: 6px;     
+  --radius: 12px;         
+  --dash-angle: 15deg;     
+  --dash-gap: 15deg;       
+  --border-color: #23a523; 
+  --speed: 5.5s;           
+}
+
+
 *{
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f2f5;
+}
+.principalContainer {
+  position: relative;           
+  background: white;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  border-radius: var(--radius);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden; 
+  transition: all ease-in-out 500ms;          
+}
+
+
+.principalContainer::before{
+  content: "";
+  position: absolute;
+  width: 500%;
+  height: 500%;
+  border-radius: calc(var(--radius) + var(--border-size));
+  z-index: 0;
+
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--border-color) 0deg var(--dash-angle),
+    transparent var(--dash-angle) calc(var(--dash-angle) + var(--dash-gap))
+  );
+
+  animation: rotateBorder var(--speed) linear infinite;
+  pointer-events: none;
+}
+
+.principalContainer::after{
+  content: "";
+  position: absolute;
+  top: var(--border-size);
+  left: var(--border-size);
+  right: var(--border-size);
+  bottom: var(--border-size);
+  border-radius: var(--radius);
+  background: white; 
+  z-index: 1;
+  pointer-events: none;
+}
+.principalContainer.dragging {
+  background-color: rgba(35, 165, 35, 0.04);
+}
+
+.principalContainer.dragging::after{
+  content: "Suelta el archivo aquí";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #d6d6d6;
+  color: #23a523;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: all ease-in-out 500ms;
+}
+
+.principalContainer > * {
+  position: relative;
+  z-index: 2;
+}
+
+
+@keyframes rotateBorder {
+  to { transform: rotate(180deg); }
+}
+
+
+.title {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  color: #23a523;
+}
+.text {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  color: #666;
+}
+input[type="file"] {
+  margin-bottom: 20px;
+}
+button {
+  background-color: #23a523;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
 }
