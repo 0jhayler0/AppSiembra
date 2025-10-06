@@ -85,6 +85,7 @@ function clasificarVariedad(nombre) {
 // === 🔹 FUNCIÓN: CREA HOJA ESPECIAL DISBUD =======================
 function crearHojaDisbud(workbook, datos) {
   const gruposTemporales = {};
+  let granTotalLargo = 0;
   datos.forEach(row => {
     const key = `${row.Seccion}_${row.Nave}_${row.Lado}_${row.Era}`;
     if (!gruposTemporales[key]) gruposTemporales[key] = [];
@@ -122,13 +123,17 @@ function crearHojaDisbud(workbook, datos) {
         Variedades: variedades,
         TotalLargo: totalLargoDisbud 
       };
+
+      granTotalLargo += totalLargoDisbud;
+      
     }
   });
+  let totalEnEras = granTotalLargo / 30;
 
   if (Object.keys(gruposFinales).length === 0) return;
 
 // ----------------------------------------------------------------------------------
-  // 3️⃣ Crear la hoja "Disbud2" en el workbook
+  // Crear la hoja "Disbud" en el workbook
   let sheet = workbook.getWorksheet("Disbud");
   if (sheet) workbook.removeWorksheet(sheet.id);
   sheet = workbook.addWorksheet("Disbud");
@@ -143,6 +148,11 @@ function crearHojaDisbud(workbook, datos) {
     { header: "Fecha Siembra", key: "siembra", width: 15 },
     { header: "Inicio Corte", key: "corte", width: 15 }
   ];
+
+  const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
   Object.values(gruposFinales).forEach(g => {
     const fila = sheet.addRow({
@@ -176,8 +186,44 @@ function crearHojaDisbud(workbook, datos) {
             })
         };
     });
+   
+    const totalRow = sheet.addRow({}); // Fila vacía inicial
+    
+    // Unir las primeras 4 celdas (Sección, Nave, Lado, Era) y poner el texto "TOTAL"
+    sheet.mergeCells(totalRow.number, 1, totalRow.number, 5);
+    const totalCell = totalRow.getCell(1);
+    totalCell.value = "TOTAL";
+    totalCell.alignment = { horizontal: 'right' };
+    
+    // Poner el Gran Total en la columna "Total Largo (solo Disbud)"
+    totalRow.getCell("total").value = granTotalLargo.toFixed(2);
+    
+    // Aplicar estilos a la fila de totales
+    totalRow.font = { bold: true, size: 12 };
+    totalRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9E1F2' } // Color de fondo azul muy claro para diferenciar
+    };
+    
+    const totalErasRow = sheet.addRow({}); 
+    
+    sheet.mergeCells(totalErasRow.number, 1, totalErasRow.number, 5);
+    const totalErasCell = totalErasRow.getCell(1);
+    totalErasCell.value = "TOTAL ERAS";
+    totalErasCell.alignment = { horizontal: 'right' };
+    
+    // Poner el Gran Total en la columna "Total Largo (solo Disbud)"
+    totalErasRow.getCell("total").value = totalEnEras.toFixed(2);
+    
+    // Aplicar estilos a la fila de totales
+    totalErasRow.font = { bold: true, size: 12 };
+    totalErasRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9E1F2' } // Color de fondo azul muy claro para diferenciar
+    };
 
-  sheet.getRow(1).font = { bold: true };
 }
 
 
