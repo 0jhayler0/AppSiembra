@@ -121,7 +121,7 @@ function App() {
           {file ? (
             <p style={{ color: "#23a523", margin: 0 }}>📄 Archivo seleccionado: {file.name}</p>
           ) : (
-            <p style={{ color: "#666", margin: 0 }}>O haz clic aquí o arrastra un .xlsx/.xls</p>
+            <p style={{ color: "#666", margin: 0 }}></p>
           )}
         </div>
       </div>

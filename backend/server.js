@@ -10,7 +10,10 @@ app.use(cors());
 
 const upload = multer({ dest: "uploads/" });
 
-// === 🔹 FUNCIONES DE LIMPIEZA Y CLASIFICACIÓN =======================
+const variedades = require("./variedades");
+
+// === 🔹 FUNCIONES AUXILIARES =======================
+
 const limpiarDatos = (data) => {
   return data
     .filter(row => row.some(cell => cell !== "" && cell != null))
@@ -39,10 +42,9 @@ const extraerSeccion = (row) => {
   }
   return null;
 };
-// === 🔹 FUNCIÓN: EXPANDIR VARIEDADES MULTIPLES =======================
+
 function expandirVariedades(row) {
     const multiplesVariedades = row.Variedad;
-    const multiplesLargos = row.Largo;
 
     const regex = /(.+?)\s*\(([\d\.]+)\)/g;
 
@@ -82,7 +84,8 @@ function clasificarVariedad(nombre) {
   return "Normal";
 }
 
-// === 🔹 FUNCIÓN: CREA HOJA ESPECIAL DISBUD =======================
+// ========== FUNCIÓN: HOJA ESPECIAL DISBUD ================================================
+
 function crearHojaDisbud(workbook, datos) {
   const gruposTemporales = {};
   let granTotalLargo = 0;
@@ -95,7 +98,7 @@ function crearHojaDisbud(workbook, datos) {
   const gruposFinales = {};
   Object.entries(gruposTemporales).forEach(([key, rows]) => {
     const base = rows[0];
-    let totalLargoDisbud = 0; 
+    let totalLargoDisbud = 0;
     let tieneDisbud = false;
     const variedades = [];
 
@@ -132,8 +135,6 @@ function crearHojaDisbud(workbook, datos) {
 
   if (Object.keys(gruposFinales).length === 0) return;
 
-// ----------------------------------------------------------------------------------
-  // Crear la hoja "Disbud" en el workbook
   let sheet = workbook.getWorksheet("Disbud");
   if (sheet) workbook.removeWorksheet(sheet.id);
   sheet = workbook.addWorksheet("Disbud");
@@ -179,7 +180,6 @@ function crearHojaDisbud(workbook, datos) {
                     ...(i > 0 ? [{ text: " " }] : []),
                     { 
                         text: textoVariedad, 
-                        // El color rojo solo se aplica si es Disbud
                         font: v.esDisbud ? { color: { argb: "FFFF0000" } } : {} 
                     }
                 ];
@@ -187,23 +187,20 @@ function crearHojaDisbud(workbook, datos) {
         };
     });
    
-    const totalRow = sheet.addRow({}); // Fila vacía inicial
+    const totalRow = sheet.addRow({}); 
     
-    // Unir las primeras 4 celdas (Sección, Nave, Lado, Era) y poner el texto "TOTAL"
     sheet.mergeCells(totalRow.number, 1, totalRow.number, 5);
     const totalCell = totalRow.getCell(1);
     totalCell.value = "TOTAL";
     totalCell.alignment = { horizontal: 'right' };
     
-    // Poner el Gran Total en la columna "Total Largo (solo Disbud)"
     totalRow.getCell("total").value = granTotalLargo.toFixed(2);
     
-    // Aplicar estilos a la fila de totales
     totalRow.font = { bold: true, size: 12 };
     totalRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FFD9E1F2' } // Color de fondo azul muy claro para diferenciar
+        fgColor: { argb: 'FFD9E1F2' } 
     };
     
     const totalErasRow = sheet.addRow({}); 
@@ -213,21 +210,400 @@ function crearHojaDisbud(workbook, datos) {
     totalErasCell.value = "TOTAL ERAS";
     totalErasCell.alignment = { horizontal: 'right' };
     
-    // Poner el Gran Total en la columna "Total Largo (solo Disbud)"
     totalErasRow.getCell("total").value = totalEnEras.toFixed(2);
     
-    // Aplicar estilos a la fila de totales
     totalErasRow.font = { bold: true, size: 12 };
     totalErasRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FFD9E1F2' } // Color de fondo azul muy claro para diferenciar
+        fgColor: { argb: 'FFD9E9F2' } 
     };
 
 }
 
 
-// === 🔹 RUTA PRINCIPAL ===========================================
+// ========== FUNCIÓN: HOJA ESPECIAL DISTRUBUCION DE LOS PRODUCTOS ============================
+
+function crearHojaDistribucionProductos(workbook, datos) {
+  const metrosPorSeccion = {};
+  const navesPorSeccion = {}; 
+
+  datos.forEach(row => {
+    const seccion = row.Seccion || "Sin Sección";
+    const tipo = clasificarVariedad(row.Variedad);
+    const largo = parseFloat(row.Largo) || 0;
+    const nave = row.Nave?.toString().trim() || "Sin Nave";
+
+  
+    if (!metrosPorSeccion[seccion]) {
+      metrosPorSeccion[seccion] = {
+        Disbud: 0,
+        Girasol: 0,
+        Normal: 0,
+        "Prueba de Floracion": 0
+      };
+    }
+    if (!navesPorSeccion[seccion]) {
+      navesPorSeccion[seccion] = new Set(); 
+    }
+
+    if (metrosPorSeccion[seccion][tipo] !== undefined) {
+      metrosPorSeccion[seccion][tipo] += largo;
+    }
+
+    if (nave !== "Sin Nave") {
+      navesPorSeccion[seccion].add(nave);
+    }
+  });
+
+  const metrosPorSeccionEnEras = {};
+  for (const seccion in metrosPorSeccion) {
+    metrosPorSeccionEnEras[seccion] = {};
+    for (const tipo in metrosPorSeccion[seccion]) {
+      metrosPorSeccionEnEras[seccion][tipo] = (metrosPorSeccion[seccion][tipo] / 30).toFixed(2);
+    }
+  }
+
+  let sheet = workbook.getWorksheet("Distribución Productos");
+  if (sheet) workbook.removeWorksheet(sheet.id);
+  sheet = workbook.addWorksheet("Distribución Productos");
+
+  sheet.columns = [
+    { header: "Sección", key: "seccion", width: 15 },
+    { header: "Naves", key: "naves", width: 25 }, 
+    { header: "Eras", key: "eras", width: 15 },
+    { header: "Pompon", key: "pompon", width: 15 },
+    { header: "Disbud", key: "disbud", width: 15 },
+    { header: "Girasol", key: "girasol", width: 15 },
+    { header: "Prueba de Floración", key: "floracion", width: 20 },
+    { header: "Total", key: "total", width: 15 },
+  ];
+
+  
+  Object.entries(metrosPorSeccionEnEras).forEach(([seccion, valores]) => {
+    const naves = Array.from(navesPorSeccion[seccion] || []).sort().join(", "); 
+
+    sheet.addRow({
+      seccion: seccion,
+      naves: naves,
+      eras: (
+        parseFloat(valores.Disbud || 0) +
+        parseFloat(valores.Girasol || 0) +
+        parseFloat(valores.Normal || 0) +
+        parseFloat(valores["Prueba de Floracion"] || 0)
+      ).toFixed(2),
+      pompon: valores.Normal,
+      disbud: valores.Disbud,
+      girasol: valores.Girasol,
+      floracion: valores["Prueba de Floracion"],
+      total: (
+        parseFloat(valores.Disbud || 0) +
+        parseFloat(valores.Girasol || 0) +
+        parseFloat(valores.Normal || 0) +
+        parseFloat(valores["Prueba de Floracion"] || 0)
+      ).toFixed(2),
+    });
+  });
+
+  sheet.getRow(1).font = { bold: true };
+
+  const totalDisbud = sheet.getColumn("disbud").values.slice(2).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+  const totalGirasol = sheet.getColumn("girasol").values.slice(2).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+  const totalPompon = sheet.getColumn("pompon").values.slice(2).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+  const totalFloracion = sheet.getColumn("floracion").values.slice(2).reduce((a, b) => a + (parseFloat(b) || 0), 0);
+  const totalGlobal = totalDisbud + totalGirasol + totalPompon + totalFloracion;
+
+  const totalRow = sheet.addRow({
+    seccion: "TOTAL GENERAL",
+    naves: "",
+    eras: totalGlobal.toFixed(2),
+    pompon: totalPompon.toFixed(2),
+    disbud: totalDisbud.toFixed(2),
+    girasol: totalGirasol.toFixed(2),
+    floracion: totalFloracion.toFixed(2),
+    total: totalGlobal.toFixed(2),
+  });
+
+  totalRow.font = { bold: true, size: 12 };
+  totalRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFCCE5FF" },
+  };
+  totalRow.alignment = { horizontal: "center" };
+}
+
+
+// ========== FUNCIÓN: HOJA ESPECIAL GIRASOL ====================================================
+
+function crearHojaGirasol(workbook, datos) {
+  const girasolPorSeccion = {};
+  const navesPorSeccion = {};
+  const fechasPorSeccion = {};
+
+  datos.forEach(row => {
+    const tipo = clasificarVariedad(row.Variedad);
+    if (tipo !== "Girasol") return;
+
+    const seccion = row.Seccion || "Sin Sección";
+    const nave = row.Nave?.toString().trim() || "Sin Nave";
+    const largo = parseFloat(row.Largo) || 0;
+    const fechaSiembra = row.Fecha_Siembra || "";
+    const inicioCorte = row.Inicio_Corte || "";
+
+    if (!girasolPorSeccion[seccion]) {
+      girasolPorSeccion[seccion] = { metros: 0 };
+      navesPorSeccion[seccion] = new Set();
+      fechasPorSeccion[seccion] = { siembra: new Set(), corte: new Set() };
+    }
+
+    girasolPorSeccion[seccion].metros += largo;
+    if (nave !== "Sin Nave") navesPorSeccion[seccion].add(nave);
+    if (fechaSiembra) fechasPorSeccion[seccion].siembra.add(fechaSiembra);
+    if (inicioCorte) fechasPorSeccion[seccion].corte.add(inicioCorte);
+  });
+
+  let sheet = workbook.getWorksheet("Girasol");
+  if (sheet) workbook.removeWorksheet(sheet.id);
+  sheet = workbook.addWorksheet("Girasol");
+
+  sheet.columns = [
+    { header: "Sección", key: "seccion", width: 15 },
+    { header: "Naves", key: "naves", width: 25 },
+    { header: "Metros", key: "metros", width: 15 },
+    { header: "Eras", key: "eras", width: 15 },
+    { header: "Fecha Siembra", key: "fechaSiembra", width: 25 },
+    { header: "Inicio Corte", key: "inicioCorte", width: 25 },
+    { header: "Estimado Producción", key: "estimado", width: 20 },
+  ];
+
+  Object.entries(girasolPorSeccion).forEach(([seccion, info]) => {
+    const metros = info.metros || 0;
+    const eras = (metros / 30).toFixed(2);
+    const estimado = (eras * 850).toFixed(0);
+
+    const naves = Array.from(navesPorSeccion[seccion] || []).sort().join(", ");
+    const fechasSiembra = Array.from(fechasPorSeccion[seccion].siembra).join(", ");
+    const fechasCorte = Array.from(fechasPorSeccion[seccion].corte).join(", ");
+
+    sheet.addRow({
+      seccion,
+      naves,
+      metros: metros.toFixed(2),
+      eras,
+      fechaSiembra: fechasSiembra,
+      inicioCorte: fechasCorte,
+      estimado
+    });
+  });
+
+  const totalMetros = Object.values(girasolPorSeccion).reduce((acc, v) => acc + v.metros, 0);
+  const totalEras = (totalMetros / 30).toFixed(2);
+  const totalEstimado = totalEras * 850;
+
+  const totalRow = sheet.addRow({
+    seccion: "TOTAL GENERAL",
+    naves: "",
+    metros: totalMetros.toFixed(2),
+    eras: totalEras,
+    estimado: totalEstimado
+  });
+
+  totalRow.font = { bold: true, size: 12 };
+  totalRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFFE699" }
+  };
+  totalRow.alignment = { horizontal: "center" };
+
+  sheet.getRow(1).font = { bold: true };
+}
+
+
+// ========== FUNCIÓN: HOJA ESPECIAL PRUEBA DE FLORACION =======================================
+
+function crearHojaPruebaFloracion(workbook, datos) {
+  const floracionData = datos.filter(row => clasificarVariedad(row.Variedad) === "Prueba de Floracion");
+  if (floracionData.length === 0) return;
+
+  const grupos = {};
+  floracionData.forEach(row => {
+    const seccion = row.Seccion || "Sin Sección";
+    const nave = row.Nave?.toString().trim() || "Sin Nave";
+    const era = row.Era || "Sin Era";
+    const key = `${seccion}_${nave}_${era}`;
+
+    if (!grupos[key]) {
+      grupos[key] = {
+        seccion,
+        nave,
+        era,
+        metros: 0,
+        fechaSiembra: row.Fecha_Siembra || "",
+        inicioCorte: row.Inicio_Corte || "",
+        variedades: new Set(),
+      };
+    }
+
+    grupos[key].metros += parseFloat(row.Largo) || 0;
+    if (row.Variedad) grupos[key].variedades.add(row.Variedad);
+  });
+
+  let sheet = workbook.getWorksheet("Prueba de Floración");
+  if (sheet) workbook.removeWorksheet(sheet.id);
+  sheet = workbook.addWorksheet("Prueba de Floración");
+
+  sheet.columns = [
+    { header: "Sección", key: "seccion", width: 15 },
+    { header: "Nave", key: "nave", width: 15 },
+    { header: "Era", key: "era", width: 10 },
+    { header: "Variedades", key: "variedades", width: 35 },
+    { header: "Metros", key: "metros", width: 15 },
+    { header: "Eras", key: "eras", width: 15 },
+    { header: "Fecha Siembra", key: "fechaSiembra", width: 18 },
+    { header: "Inicio Corte", key: "inicioCorte", width: 18 },
+  ];
+
+  Object.values(grupos).forEach(info => {
+    const variedades = Array.from(info.variedades).sort().join(", ");
+    const metros = info.metros;
+    const eras = (metros / 30).toFixed(2);
+
+
+    sheet.addRow({
+      seccion: info.seccion,
+      nave: info.nave,
+      era: info.era,
+      variedades,
+      metros: metros.toFixed(2),
+      eras,
+      fechaSiembra: info.fechaSiembra,
+      inicioCorte: info.inicioCorte,
+    });
+  });
+
+  const totalMetros = Object.values(grupos).reduce((acc, g) => acc + g.metros, 0);
+  const totalEras = (totalMetros / 30).toFixed(2);
+
+  const totalRow = sheet.addRow({
+    seccion: "TOTAL GENERAL",
+    metros: totalMetros.toFixed(2),
+    eras: totalEras,
+  });
+
+  totalRow.font = { bold: true, size: 12 };
+  totalRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFFFE699" },
+  };
+  totalRow.alignment = { horizontal: "center" };
+
+  sheet.getRow(1).font = { bold: true };
+}
+
+// ========== FUNCIÓN: HOJA ESPECIAL NOCHES DE LUZ ==============================================
+function crearHojaNochesLuz(workbook, datos) {
+  if (!Array.isArray(datos) || datos.length === 0) return;
+
+  const nochesMap = new Map(variedades.map(v => [String(v.nombre).trim().toLowerCase(), Number(v.nochesLuz) || 17]));
+  const defecto = 17;
+
+  const obtenerNochesDeCelda = (variedadCell) => {
+    if (!variedadCell || String(variedadCell).trim() === "") return defecto;
+
+    const partes = String(variedadCell)
+      .split(/[,\/\\\|\;\+\&]| y |;/i)
+      .map(p => p.trim())
+      .filter(Boolean);
+
+    const candidatos = partes.length ? partes : [String(variedadCell).trim()];
+
+    const nochesEncontradas = candidatos.map(p => {
+      const key = p.toLowerCase();
+      return nochesMap.has(key) ? nochesMap.get(key) : defecto;
+    });
+
+    return Math.max(...nochesEncontradas);
+  };
+
+  const grupos = {};
+  datos.forEach(r => {
+    const key = `${r.Seccion || ""}__${r.FilaId ?? ""}`;
+    if (!grupos[key]) grupos[key] = { A: null, B: null, Seccion: r.Seccion || "" };
+    if (r.Lado === "A") grupos[key].A = r;
+    if (r.Lado === "B") grupos[key].B = r;
+  });
+
+  let sheet = workbook.getWorksheet("Noches de Luz");
+  if (sheet) workbook.removeWorksheet(sheet.id);
+  sheet = workbook.addWorksheet("Noches de Luz");
+
+  sheet.columns = [
+    { header: "Sección", key: "Seccion", width: 10 },
+    { header: "Nave", key: "NaveA", width: 12 },
+    { header: "Era", key: "EraA", width: 10 },
+    { header: "Variedad", key: "VarA", width: 35 },
+    { header: "Fecha Siembra", key: "SiembraA", width: 15 },
+    { header: "Inicio Corte", key: "CorteA", width: 15 },
+    { header: "Noches", key: "NochesA", width: 12 },
+    { header: " ", key: "espacioEnBlanco", width: 12 },
+    { header: "Nave", key: "NaveB", width: 12 },
+    { header: "Era", key: "EraB", width: 10 },
+    { header: "Variedad", key: "VarB", width: 35 },
+    { header: "Fecha Siembra", key: "SiembraB", width: 15 },
+    { header: "Inicio Corte", key: "CorteB", width: 15 },
+    { header: "Noches", key: "NochesB", width: 12 }
+  ];
+
+  sheet.getRow(1).font = { bold: true };
+
+  // fila 2: títulos agrupados para Lado A (cols B-G) y Lado B (cols I-N)
+  sheet.mergeCells('B2:G2');
+  const ladoACell = sheet.getCell('B2');
+  ladoACell.value = 'Lado A';
+  ladoACell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ladoACell.font = { bold: true };
+  ladoACell.fill = { type: 'pattern', pattern:'solid', fgColor: { argb:'FFEEEEEE' } };
+
+  sheet.mergeCells('I2:N2');
+  const ladoBCell = sheet.getCell('I2');
+  ladoBCell.value = 'Lado B';
+  ladoBCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ladoBCell.font = { bold: true };
+  ladoBCell.fill = { type: 'pattern', pattern:'solid', fgColor: { argb:'FFEEEEEE' } };
+
+  // ajustar altura de la fila de grupo (opcional)
+  sheet.getRow(2).height = 18;
+
+  Object.values(grupos).forEach(g => {
+    const A = g.A || {};
+    const B = g.B || {};
+
+    const nochesA = obtenerNochesDeCelda(A.Variedad);
+    const nochesB = obtenerNochesDeCelda(B.Variedad);
+
+    sheet.addRow({
+      Seccion: g.Seccion,
+      NaveA: A.Nave || "",
+      EraA: A.Era || "",
+      VarA: A.Variedad || "",
+      SiembraA: A.Fecha_Siembra || "",
+      CorteA: A.Inicio_Corte || "",
+      NochesA: nochesA,
+      NaveB: B.Nave || "",
+      EraB: B.Era || "",
+      VarB: B.Variedad || "",
+      SiembraB: B.Fecha_Siembra || "",
+      CorteB: B.Inicio_Corte || "",
+      NochesB: nochesB
+    });
+  });
+}
+
+// ========== RUTA PRINCIPAL ====================================================================
+
 app.post("/upload-excel", upload.single("file"), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No se envió ningún archivo" });
@@ -241,7 +617,8 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
         const datosCrudos = []; 
         let seccionActual = "N/A";
 
-        //  Lógica para extraer datos crudos del Excel 
+    
+
         for (let i = 0; i < datosLimpios.length; i++) {
             const row = datosLimpios[i];
             const nuevaSeccion = extraerSeccion(row);
@@ -265,30 +642,37 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
                     let datosCompletos = rellenarColumna(bloqueDatos, 0);
                     datosCompletos = rellenarColumna(datosCompletos, 6);
 
+                   let filaId = 0;
                     datosCompletos.forEach(r => {
                         datosCrudos.push(
-                            { Seccion: seccionActual, Lado: "A", Nave: r[0] || "", Era: r[1] || "", Variedad: r[2] || "", Largo: r[3] || "", Fecha_Siembra: r[4] || "", Inicio_Corte: r[5] || "" },
-                            { Seccion: seccionActual, Lado: "B", Nave: r[6] || "", Era: r[7] || "", Variedad: r[8] || "", Largo: r[9] || "", Fecha_Siembra: r[10] || "", Inicio_Corte: r[11] || "" }
+                            { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: r[0] || "", Era: r[1] || "", Variedad: r[2] || "", Largo: r[3] || "", Fecha_Siembra: r[4] || "", Inicio_Corte: r[5] || "" },
+                            { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: r[6] || "", Era: r[7] || "", Variedad: r[8] || "", Largo: r[9] || "", Fecha_Siembra: r[10] || "", Inicio_Corte: r[11] || "" }
                         );
+                        filaId++;
                     });
                 }
             }
         }
+
+
         
         const datosFinales = datosCrudos.flatMap(expandirVariedades);
-        // ----------------------------------------------------
 
-        // === Crear libro combinado con ExcelJS ===
         const wbFinal = new ExcelJS.Workbook();
 
-        // Crear hoja Disbud con formato
+        
+        // Creacion de las hojas .xlsx
+        crearHojaDistribucionProductos(wbFinal, datosFinales);
         crearHojaDisbud(wbFinal, datosFinales);
+        crearHojaGirasol(wbFinal, datosFinales);
+        crearHojaPruebaFloracion(wbFinal, datosFinales);
+        crearHojaNochesLuz(wbFinal, datosCrudos);
 
         // Guardar archivo final
         const outputPath = `Reporte_Siembra_${Date.now()}.xlsx`;
         await wbFinal.xlsx.writeFile(outputPath);
 
-        console.log("✅ Reporte completo generado:", outputPath);
+        console.log("Reporte completo generado:", outputPath);
 
         res.download(outputPath, "Reporte_Siembra.xlsx", (err) => {
             if (err) console.error("Error enviando el archivo:", err);
@@ -298,7 +682,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
         fs.unlinkSync(filePath);
 
     } catch (error) {
-        console.error("❌ Error procesando Excel:", error);
+        console.error("Error procesando Excel:", error);
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ error: "Error procesando el archivo", detalle: error.message });
     }

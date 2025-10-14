@@ -4,7 +4,7 @@
   --dash-angle: 15deg;     
   --dash-gap: 15deg;       
   --border-color: #23a523; 
-  --speed: 5.5s;           
+  --speed: 100s;           
 }
 
 
@@ -44,8 +44,8 @@
 .principalContainer::before{
   content: "";
   position: absolute;
-  width: 500%;
-  height: 500%;
+  width: 300%;
+  height: 300%;
   border-radius: calc(var(--radius) + var(--border-size));
   z-index: 0;
 
