@@ -20,11 +20,21 @@ function App() {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    // Crear un objeto URL temporal
+    // obtener nombre desde header Content-Disposition si está presente
+    const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
+    let filename = "Reporte_Siembra_Sem.xlsx";
+    if (disposition) {
+      const match = /filename\*?=(?:UTF-8''?)?["']?([^;"']+)["']?/i.exec(disposition);
+      if (match && match[1]) {
+        try { filename = decodeURIComponent(match[1]); } catch (e) { filename = match[1]; }
+      }
+    }
+
+    // Crear un objeto URL temporal y descargar con el nombre correcto
     const url = window.URL.createObjectURL(new Blob([res.data]));
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "Reporte_Siembra.xlsx"); // 👈 Nombre del archivo
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
 

@@ -7,6 +7,10 @@ const ExcelJS = require("exceljs");
 
 const app = express();
 app.use(cors());
+app.use((req, res, next) => {
+  res.header("Access-Control-Expose-Headers", "Content-Disposition");
+  next();
+});
 
 const upload = multer({ dest: "uploads/" });
 
@@ -324,6 +328,11 @@ function crearHojaDistribucionProductos(workbook, datos) {
     total: totalGlobal.toFixed(2),
   });
 
+  const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    
   totalRow.font = { bold: true, size: 12 };
   totalRow.fill = {
     type: "pattern",
@@ -363,49 +372,130 @@ function crearHojaGirasol(workbook, datos) {
     if (inicioCorte) fechasPorSeccion[seccion].corte.add(inicioCorte);
   });
 
+  const monthMap = {
+    ene:0, 
+    feb:1, 
+    mar:2, 
+    abr:3, 
+    may:4, 
+    jun:5, 
+    jul:6, 
+    ago:7, 
+    sep:8, 
+    oct:9, 
+    nov:10, 
+    dic:11, 
+  };
+
+  function parseInicioCorteToDate(token, fallbackYear) {
+    if (!token && token !== 0) return null;
+    if (token instanceof Date && !isNaN(token)) return token;
+    const s = String(token).trim().toLowerCase();
+    const m = s.match(/^(\d{1,2})\s*[-\/\s\.]?\s*([a-zñ\.]+)\b/);
+    if (m) {
+      const day = parseInt(m[1], 10);
+      const monToken = m[2].replace(/\.$/, "");
+      const monthIndex = monthMap[monToken];
+      if (monthIndex !== undefined) {
+        const year = Number(fallbackYear) || (new Date()).getFullYear();
+        const d = new Date(year, monthIndex, day);
+        if (!isNaN(d)) return d;
+      }
+    }
+    const iso = s.match(/(\d{4}-\d{2}-\d{2})/);
+    if (iso) {
+      const d = new Date(iso[1]);
+      if (!isNaN(d)) return d;
+    }
+    const dmy = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (dmy) {
+      let day = parseInt(dmy[1],10), month = parseInt(dmy[2],10)-1, year = parseInt(dmy[3],10);
+      if (year < 100) year += 2000;
+      const d = new Date(year, month, day);
+      if (!isNaN(d)) return d;
+    }
+    const dFallback = new Date(s);
+    if (!isNaN(dFallback)) return dFallback;
+    return null;
+  }
+
+  function getISOWeek(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  }
+
   let sheet = workbook.getWorksheet("Girasol");
   if (sheet) workbook.removeWorksheet(sheet.id);
   sheet = workbook.addWorksheet("Girasol");
 
   sheet.columns = [
     { header: "Sección", key: "seccion", width: 15 },
-    { header: "Naves", key: "naves", width: 25 },
-    { header: "Metros", key: "metros", width: 15 },
+    { header: "Nave", key: "naves", width: 25 },
     { header: "Eras", key: "eras", width: 15 },
     { header: "Fecha Siembra", key: "fechaSiembra", width: 25 },
     { header: "Inicio Corte", key: "inicioCorte", width: 25 },
+    { header: "Semana Corte", key: "semanaCorte", width: 25 },
     { header: "Estimado Producción", key: "estimado", width: 20 },
   ];
 
   Object.entries(girasolPorSeccion).forEach(([seccion, info]) => {
     const metros = info.metros || 0;
     const eras = (metros / 30).toFixed(2);
-    const estimado = (eras * 850).toFixed(0);
+    const estimado = Math.round(eras * 850);
 
     const naves = Array.from(navesPorSeccion[seccion] || []).sort().join(", ");
-    const fechasSiembra = Array.from(fechasPorSeccion[seccion].siembra).join(", ");
-    const fechasCorte = Array.from(fechasPorSeccion[seccion].corte).join(", ");
+    const fechasSiembraArr = Array.from(fechasPorSeccion[seccion].siembra).filter(Boolean);
+    const fechasCorteArr = Array.from(fechasPorSeccion[seccion].corte).filter(Boolean);
+
+    let defaultYear = (new Date()).getFullYear();
+    if (fechasSiembraArr.length > 0) {
+      const tryDate = new Date(fechasSiembraArr[0]);
+      if (!isNaN(tryDate)) defaultYear = tryDate.getFullYear();
+      else {
+        const m = String(fechasSiembraArr[0]).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (m) { let y = parseInt(m[3],10); if (y < 100) y += 2000; defaultYear = y; }
+      }
+    }
+
+    const semanas = fechasCorteArr
+      .map(fc => parseInicioCorteToDate(fc, defaultYear))
+      .filter(d => d instanceof Date && !isNaN(d))
+      .map(d => getISOWeek(d));
+
+    const semanasUnicas = Array.from(new Set(semanas)).sort((a,b) => a-b);
+
+    const semanaCorte = semanasUnicas.length > 0 ? String(Math.max(...semanasUnicas)).padStart(2, "0") : "";
 
     sheet.addRow({
       seccion,
       naves,
-      metros: metros.toFixed(2),
       eras,
-      fechaSiembra: fechasSiembra,
-      inicioCorte: fechasCorte,
+      fechaSiembra: fechasSiembraArr.join(", "),
+      inicioCorte: fechasCorteArr.join(", "),
+      semanaCorte,
       estimado
     });
   });
 
+  // totales
   const totalMetros = Object.values(girasolPorSeccion).reduce((acc, v) => acc + v.metros, 0);
   const totalEras = (totalMetros / 30).toFixed(2);
-  const totalEstimado = totalEras * 850;
+  const totalEstimado = Math.round(totalEras * 850);
+
+  const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  
 
   const totalRow = sheet.addRow({
     seccion: "TOTAL GENERAL",
     naves: "",
-    metros: totalMetros.toFixed(2),
     eras: totalEras,
+    semanaCorte: "",
     estimado: totalEstimado
   });
 
@@ -420,7 +510,6 @@ function crearHojaGirasol(workbook, datos) {
   sheet.getRow(1).font = { bold: true };
 }
 
-
 // ========== FUNCIÓN: HOJA ESPECIAL PRUEBA DE FLORACION =======================================
 
 function crearHojaPruebaFloracion(workbook, datos) {
@@ -432,22 +521,26 @@ function crearHojaPruebaFloracion(workbook, datos) {
     const seccion = row.Seccion || "Sin Sección";
     const nave = row.Nave?.toString().trim() || "Sin Nave";
     const era = row.Era || "Sin Era";
-    const key = `${seccion}_${nave}_${era}`;
+    const lado = row.Lado || ""; // A o B
+    const key = `${seccion}__${nave}__${era}__${lado}`;
 
     if (!grupos[key]) {
       grupos[key] = {
         seccion,
         nave,
         era,
+        lado,
         metros: 0,
         fechaSiembra: row.Fecha_Siembra || "",
         inicioCorte: row.Inicio_Corte || "",
-        variedades: new Set(),
+        variedades: new Set()
       };
     }
 
     grupos[key].metros += parseFloat(row.Largo) || 0;
     if (row.Variedad) grupos[key].variedades.add(row.Variedad);
+    if (!grupos[key].fechaSiembra && row.Fecha_Siembra) grupos[key].fechaSiembra = row.Fecha_Siembra;
+    if (!grupos[key].inicioCorte && row.Inicio_Corte) grupos[key].inicioCorte = row.Inicio_Corte;
   });
 
   let sheet = workbook.getWorksheet("Prueba de Floración");
@@ -456,11 +549,12 @@ function crearHojaPruebaFloracion(workbook, datos) {
 
   sheet.columns = [
     { header: "Sección", key: "seccion", width: 15 },
-    { header: "Nave", key: "nave", width: 15 },
-    { header: "Era", key: "era", width: 10 },
-    { header: "Variedades", key: "variedades", width: 35 },
-    { header: "Metros", key: "metros", width: 15 },
-    { header: "Eras", key: "eras", width: 15 },
+    { header: "Nave", key: "nave", width: 12 },
+    { header: "Lado", key: "lado", width: 8 },
+    { header: "Era", key: "era", width: 14 },
+    { header: "Variedades", key: "variedades", width: 40 },
+    { header: "Metros", key: "metros", width: 12 },
+    { header: "Eras", key: "eras", width: 12 },
     { header: "Fecha Siembra", key: "fechaSiembra", width: 18 },
     { header: "Inicio Corte", key: "inicioCorte", width: 18 },
   ];
@@ -470,10 +564,10 @@ function crearHojaPruebaFloracion(workbook, datos) {
     const metros = info.metros;
     const eras = (metros / 30).toFixed(2);
 
-
     sheet.addRow({
       seccion: info.seccion,
       nave: info.nave,
+      lado: info.lado,
       era: info.era,
       variedades,
       metros: metros.toFixed(2),
@@ -485,6 +579,11 @@ function crearHojaPruebaFloracion(workbook, datos) {
 
   const totalMetros = Object.values(grupos).reduce((acc, g) => acc + g.metros, 0);
   const totalEras = (totalMetros / 30).toFixed(2);
+
+  const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCCCCC' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
   const totalRow = sheet.addRow({
     seccion: "TOTAL GENERAL",
@@ -541,25 +640,28 @@ function crearHojaNochesLuz(workbook, datos) {
   sheet = workbook.addWorksheet("Noches de Luz");
 
   sheet.columns = [
-    { header: "Sección", key: "Seccion", width: 10 },
-    { header: "Nave", key: "NaveA", width: 12 },
-    { header: "Era", key: "EraA", width: 10 },
-    { header: "Variedad", key: "VarA", width: 35 },
+    { header: "Sección", key: "Seccion", width: 8 },
+    { header: "Nave", key: "NaveA", width: 8 },
+    { header: "Era", key: "EraA", width: 8 },
+    { header: "Variedad", key: "VarA", width: 55 },
     { header: "Fecha Siembra", key: "SiembraA", width: 15 },
     { header: "Inicio Corte", key: "CorteA", width: 15 },
     { header: "Noches", key: "NochesA", width: 12 },
-    { header: " ", key: "espacioEnBlanco", width: 12 },
-    { header: "Nave", key: "NaveB", width: 12 },
-    { header: "Era", key: "EraB", width: 10 },
-    { header: "Variedad", key: "VarB", width: 35 },
+    { header: " ", key: "espacioEnBlanco", width: 5 },
+    { header: "Nave", key: "NaveB", width: 8 },
+    { header: "Era", key: "EraB", width: 8 },
+    { header: "Variedad", key: "VarB", width: 55 },
     { header: "Fecha Siembra", key: "SiembraB", width: 15 },
     { header: "Inicio Corte", key: "CorteB", width: 15 },
     { header: "Noches", key: "NochesB", width: 12 }
   ];
 
-  sheet.getRow(1).font = { bold: true };
+   const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF87CEEB' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
 
-  // fila 2: títulos agrupados para Lado A (cols B-G) y Lado B (cols I-N)
+
   sheet.mergeCells('B2:G2');
   const ladoACell = sheet.getCell('B2');
   ladoACell.value = 'Lado A';
@@ -574,7 +676,6 @@ function crearHojaNochesLuz(workbook, datos) {
   ladoBCell.font = { bold: true };
   ladoBCell.fill = { type: 'pattern', pattern:'solid', fgColor: { argb:'FFEEEEEE' } };
 
-  // ajustar altura de la fila de grupo (opcional)
   sheet.getRow(2).height = 18;
 
   Object.values(grupos).forEach(g => {
@@ -616,12 +717,35 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
         let datosLimpios = limpiarDatos(data);
         const datosCrudos = []; 
         let seccionActual = "N/A";
+        let semanaActual = "";
 
-    
+const extraerSemana = (row) => {
+  if (!Array.isArray(row)) return null;
+
+  for (const cell of row) {
+    if (!cell) continue;
+    const texto = String(cell).trim();
+
+    const match = texto.match(/Semana\s+Siembra\s+(2\d{5})/i);
+    if (match) {
+      console.log("🗓 Semana encontrada:", match[1], "en texto:", texto);
+      return match[1];
+    }
+  }
+
+  return null;
+};
+
 
         for (let i = 0; i < datosLimpios.length; i++) {
             const row = datosLimpios[i];
+            const nuevaSemana = extraerSemana(row);
             const nuevaSeccion = extraerSeccion(row);
+
+            if (nuevaSemana) {
+                semanaActual = nuevaSemana;
+            }
+
             if (nuevaSeccion) {
                 seccionActual = nuevaSeccion;
                 continue;
@@ -669,12 +793,12 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
         crearHojaNochesLuz(wbFinal, datosCrudos);
 
         // Guardar archivo final
-        const outputPath = `Reporte_Siembra_${Date.now()}.xlsx`;
+        const outputPath = `Reporte_Siembra_Sem_${semanaActual}_${Date.now()}.xlsx`;
         await wbFinal.xlsx.writeFile(outputPath);
 
         console.log("Reporte completo generado:", outputPath);
 
-        res.download(outputPath, "Reporte_Siembra.xlsx", (err) => {
+        res.download(outputPath, `Reporte_Siembra_Sem_${semanaActual}.xlsx`, (err) => {
             if (err) console.error("Error enviando el archivo:", err);
             fs.unlinkSync(outputPath);
         });
