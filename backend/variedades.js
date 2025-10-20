@@ -211,7 +211,7 @@ const variedades = [
   { nombre: "Quartz Green", color: "Green", nochesLuz: 3 },
   { nombre: "Spider Bronze", color: "Bronce", nochesLuz: 17 },
   { nombre: "White Yazoo", color: "White", nochesLuz: 17 },
-  { nombre: "Vincent Choice", color: "Sunflower", nochesLuz: "N/A" }
+  { nombre: "Vincent Choice", color: "Sunflower", nochesLuz: 0 }
 ];
 
 module.exports = variedades;
