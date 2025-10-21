@@ -22,7 +22,7 @@ function App() {
 
     // obtener nombre desde header Content-Disposition si está presente
     const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
-    let filename = "Reporte_Siembra_Sem.xlsx";
+    let filename = "Reporte_Siembra_.xlsx";
     if (disposition) {
       const match = /filename\*?=(?:UTF-8''?)?["']?([^;"']+)["']?/i.exec(disposition);
       if (match && match[1]) {

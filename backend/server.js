@@ -82,7 +82,7 @@ function clasificarVariedad(nombre) {
   if (!nombre || typeof nombre !== "string") return "Desconocido";
   const lower = nombre.toLowerCase();
   if (lower.includes("prueba de floracion")) return "Prueba de Floracion";
-  if (lower.includes("cremon") || lower.includes("spider") || lower.includes("anastasia") || lower.includes("towi"))
+  if (lower.includes("cremon") || lower.includes("spider") || lower.includes("anastasia") || lower.includes("tutu"))
     return "Disbud";
   if (lower.includes("vincent choice") || lower.includes("girasol")) return "Girasol";
   return "Normal";
@@ -639,6 +639,7 @@ function crearHojaNochesLuz(workbook, datos) {
         if (!isNaN(dateInfo)) return dateInfo;
       } catch (e) {}
     }
+    
 
     const s = String(value).trim();
     const dIso = new Date(s);
@@ -882,12 +883,12 @@ const extraerSemana = (row) => {
         crearHojaNochesLuz(wbFinal, datosCrudos);
 
         // Guardar archivo final
-        const outputPath = `Reporte_Siembra_Sem_${semanaActual}_${Date.now()}.xlsx`;
+        const outputPath = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
         await wbFinal.xlsx.writeFile(outputPath);
 
         console.log("Reporte completo generado:", outputPath);
 
-        res.download(outputPath, `Reporte_Siembra_Sem_${semanaActual}.xlsx`, (err) => {
+        res.download(outputPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
             if (err) console.error("Error enviando el archivo:", err);
             fs.unlinkSync(outputPath);
         });
