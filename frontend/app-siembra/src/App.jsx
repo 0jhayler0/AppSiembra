@@ -16,11 +16,10 @@ function App() {
 
   try {
     const res = await axios.post("http://localhost:5000/upload-excel", formData, {
-      responseType: "blob", // 👈 Muy importante para recibir el Excel
+      responseType: "blob", 
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    // obtener nombre desde header Content-Disposition si está presente
     const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
     let filename = "Reporte_Siembra_.xlsx";
     if (disposition) {
@@ -30,7 +29,6 @@ function App() {
       }
     }
 
-    // Crear un objeto URL temporal y descargar con el nombre correcto
     const url = window.URL.createObjectURL(new Blob([res.data]));
     const link = document.createElement("a");
     link.href = url;
@@ -84,12 +82,10 @@ function App() {
       alert("Solo se permiten archivos Excel (.xlsx, .xls)");
     }
 
-    // Desactiva el estado "isDropping" después de un momento
     setTimeout(() => setIsDropping(false), 300);
   };
 
   const handleContainerClick = (e) => {
-    // Bloquea el click mientras arrastras 
     if (isDragging || isDropping) {
       e.preventDefault();
       e.stopPropagation();
