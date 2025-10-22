@@ -8,43 +8,44 @@ function App() {
   const [isDropping, setIsDropping] = useState(false);
   const inputRef = useRef(null);
 
-  const handleUpload = async () => {
-  if (!file) return alert("Selecciona o arrastra un archivo Excel primero");
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  try {
-    const res = await axios.post("http://localhost:5000/upload-excel", formData, {
-      responseType: "blob", 
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    const disposition = res.headers["content-disposition"] || res.headers["Content-Disposition"];
-    let filename = "Reporte_Siembra_.xlsx";
+  const downloadBlob = (blob, dispositionFallback) => {
+    const disposition = blob.headers ? (blob.headers["content-disposition"] || blob.headers["Content-Disposition"]) : null;
+    let filename = dispositionFallback || "Reporte_Siembra";
     if (disposition) {
       const match = /filename\*?=(?:UTF-8''?)?["']?([^;"']+)["']?/i.exec(disposition);
       if (match && match[1]) {
         try { filename = decodeURIComponent(match[1]); } catch (e) { filename = match[1]; }
       }
     }
-
-    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const url = window.URL.createObjectURL(new Blob([blob.data] || [blob]));
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
-
-    // Limpieza
     link.remove();
     window.URL.revokeObjectURL(url);
     setFile(null);
-  } catch (error) {
-    console.error("Error subiendo el archivo:", error);
-    alert("❌ Error al generar el reporte. Revisa la consola para más detalles.");
-  }
-};
+  };
+
+  const handleUpload = async (format = 'xlsx') => {
+    if (!file) return alert("Selecciona o arrastra un archivo Excel primero");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await axios.post(`http://localhost:5000/upload-excel?format=${format}`, formData, {
+        responseType: "blob",
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // axios returns headers in res.headers and the blob data in res.data
+      downloadBlob({ data: res.data, headers: res.headers }, `Reporte_Siembra_.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
+    } catch (error) {
+      console.error("Error subiendo el archivo:", error);
+      alert("❌ Error al generar el reporte. Revisa la consola para más detalles.");
+    }
+  };
 
 
   // --- DRAG & DROP ---
@@ -107,7 +108,7 @@ function App() {
         tabIndex={0}
       >
         <h1 className="title">Reportes de siembra</h1>
-        <h2 className="text">Selecciona o arrastra un archivo Excel para generar los reportes automáticamente</h2>
+        <h2 className="text">Haz click para seleccionar o arrastra un archivo de Excel o PDF para generar los reportes automáticamente</h2>
 
         <input
           ref={inputRef}
@@ -118,8 +119,8 @@ function App() {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
             const name = String(f.name).toLowerCase();
-            if (name.endsWith(".xlsx") || name.endsWith(".xls")) setFile(f);
-            else alert("Solo se permiten archivos Excel (.xlsx, .xls)");
+            if (name.endsWith(".xlsx") || name.endsWith(".xls")|| name.endsWith(".pdf")) setFile(f);
+            else alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
           }}
         />
 
@@ -131,10 +132,15 @@ function App() {
           )}
         </div>
       </div>
-
-        <button onClick={handleUpload} disabled={!file}>
-          Crear reportes
-        </button>
+          <div className="buttons"></div>
+        <div className="buttons">
+          <button className="btn-excel" onClick={() => handleUpload('xlsx')} disabled={!file}>
+            Descargar en Excel
+          </button>
+          <button className="btn-pdf" onClick={() => handleUpload('pdf')} disabled={!file}>
+            Descargar en PDF
+          </button>
+        </div>
     </section>
   );
 }

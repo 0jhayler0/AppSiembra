@@ -4,7 +4,7 @@
   --dash-angle: 15deg;     
   --dash-gap: 15deg;       
   --border-color: #23a523; 
-  --speed: 100s;           
+  --speed: 10s;           
 }
 
 
@@ -24,7 +24,8 @@
   background-color: #f0f2f5;
 }
 .principalContainer {
-  position: relative;           
+  position: relative;  
+  width: 400px;         
   background: white;
   padding: 40px;
   display: flex;
@@ -111,6 +112,13 @@
 }
 input[type="file"] {
   margin-bottom: 20px;
+}
+
+.buttons  {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: center;
 }
 button {
   background-color: #23a523;

@@ -18,6 +18,14 @@ app.use(cors({
   exposedHeaders: ['Content-Disposition']
 }));
 
+// puppeteer is optional; if not installed we'll return a helpful error when PDF is requested
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer');
+} catch (e) {
+  // ignore; we'll notify later if PDF requested
+}
+
 // === 🔹 FUNCIONES AUXILIARES =======================
 
 const limpiarDatos = (data) => {
@@ -154,18 +162,62 @@ const extraerSemana = (row) => {
   sheets.crearHojaPruebaFloracion(wbFinal, datosFinales);
   sheets.crearHojaNochesLuz(wbFinal, datosCrudos, { variedades });
 
-        // Guardar archivo final
-        const outputPath = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
-        await wbFinal.xlsx.writeFile(outputPath);
+        // Guardar archivo final o generar PDF según query param
+        const wantPdf = String(req.query.format || '').toLowerCase() === 'pdf';
 
-        console.log("Reporte completo generado:", outputPath);
+        if (!wantPdf) {
+          const outputPath = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
+          await wbFinal.xlsx.writeFile(outputPath);
+          console.log("Reporte completo generado:", outputPath);
+          res.download(outputPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
+              if (err) console.error("Error enviando el archivo:", err);
+              try { fs.unlinkSync(outputPath); } catch(e){}
+          });
+        } else {
+          if (!puppeteer) {
+            return res.status(400).json({ error: 'PDF generation not available: puppeteer not installed on the server.' });
+          }
 
-        res.download(outputPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
-            if (err) console.error("Error enviando el archivo:", err);
-            fs.unlinkSync(outputPath);
-        });
+          // Convert each worksheet to a simple HTML table and concatenate
+          function sheetToHTML(sheet) {
+            const rows = [];
+            sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+              const cells = [];
+              row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const text = cell.value == null ? '' : String(cell.value);
+                cells.push(`<td>${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`);
+              });
+              rows.push(`<tr>${cells.join('')}</tr>`);
+            });
+            return `<h2>${sheet.name}</h2><table border="1" style="border-collapse:collapse; width:100%">${rows.join('')}</table><div style="page-break-after:always"></div>`;
+          }
 
-        fs.unlinkSync(filePath);
+          // build HTML
+          const htmlParts = ['<html><head><meta charset="utf-8"><style>table,td{font-family:Arial,sans-serif;font-size:10px;padding:4px}</style></head><body>'];
+          wbFinal.eachSheet(sheet => {
+            htmlParts.push(sheetToHTML(sheet));
+          });
+          htmlParts.push('</body></html>');
+          const finalHtml = htmlParts.join('\n');
+
+          // render PDF with puppeteer
+          const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+          const page = await browser.newPage();
+          await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
+          const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+          await browser.close();
+
+          const outputPdf = `Reporte_Siembra_${semanaActual}_${Date.now()}.pdf`;
+          fs.writeFileSync(outputPdf, pdfBuffer);
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="Reporte_Siembra_${semanaActual}.pdf"`);
+          res.sendFile(path.resolve(outputPdf), (err) => {
+            try { fs.unlinkSync(outputPdf); } catch(e){}
+          });
+        }
+
+        // borrar archivo subido
+        try { fs.unlinkSync(filePath); } catch(e){}
 
     } catch (error) {
         console.error("Error procesando Excel:", error);

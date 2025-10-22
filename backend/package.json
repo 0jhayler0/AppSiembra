@@ -16,6 +16,7 @@
     "multer": "^2.0.2",
     "pdf-parse": "^1.1.1",
     "pdfreader": "^3.0.7",
+    "puppeteer": "^24.26.0",
     "xlsx": "^0.18.5"
   }
 }
