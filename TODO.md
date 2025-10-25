@@ -1,0 +1,4 @@
+- [ ] Modify extraer_tabla_visual function to return separate dictionaries for Lado A and Lado B instead of combining them.
+- [ ] Update the main function to collect all rows for A and B separately.
+- [ ] Adjust DataFrame creation with new columns: Nave, Era, Variedad, Largo, Fecha Siembra, Corte, Lado, Sección.
+- [ ] Sort the DataFrame by Sección and Lado.

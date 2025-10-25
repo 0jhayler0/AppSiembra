@@ -39,7 +39,6 @@ function App() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // axios returns headers in res.headers and the blob data in res.data
       downloadBlob({ data: res.data, headers: res.headers }, `Reporte_Siembra_.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
     } catch (error) {
       console.error("Error subiendo el archivo:", error);
@@ -77,10 +76,10 @@ function App() {
     if (!droppedFile) return;
 
     const name = String(droppedFile.name).toLowerCase();
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
       setFile(droppedFile);
     } else {
-      alert("Solo se permiten archivos Excel (.xlsx, .xls)");
+      alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
     }
 
     setTimeout(() => setIsDropping(false), 300);
@@ -114,13 +113,13 @@ function App() {
           ref={inputRef}
           style={{ display: "none" }}
           type="file"
-          accept=".xlsx, .xls"
+          accept=".xlsx, .xls, .pdf"
           onChange={(e) => {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
             const name = String(f.name).toLowerCase();
-            if (name.endsWith(".xlsx") || name.endsWith(".xls")|| name.endsWith(".pdf")) setFile(f);
-            else alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
+            if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) setFile(f);
+            else alert("Solo se permiten archivos Excel o PDF (.xlsx, .xls, .pdf)");
           }}
         />
 

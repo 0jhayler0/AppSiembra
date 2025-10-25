@@ -11,22 +11,19 @@ const app = express();
 const upload = multer({ dest: path.join(__dirname, 'output', 'uploads') });
 const cors = require('cors');
 
-// Permitir peticiones desde el frontend (Vite por defecto corre en 5173)
 app.use(cors({
   origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   methods: ['GET','POST','OPTIONS'],
   exposedHeaders: ['Content-Disposition']
 }));
 
-// puppeteer is optional; if not installed we'll return a helpful error when PDF is requested
 let puppeteer = null;
 try {
   puppeteer = require('puppeteer');
 } catch (e) {
-  // ignore; we'll notify later if PDF requested
 }
 
-// === 🔹 FUNCIONES AUXILIARES =======================
+// === FUNCIONES AUXILIARES =======================
 
 const limpiarDatos = (data) => {
   return data
@@ -76,10 +73,38 @@ function expandirVariedades(row) {
 // ========== RUTA PRINCIPAL ====================================================================
 
 app.post("/upload-excel", upload.single("file"), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: "No se envió ningún archivo" });
+  try {
+    if (!req.file) return res.status(400).json({ error: "No se envió ningún archivo" });
 
-        const filePath = req.file.path;
+    const originalUploadPath = req.file.path; 
+    let filePath = originalUploadPath;
+    let convertedXlsxPath = null;
+        const originalName = req.file.originalname || '';
+        const ext = path.extname(originalName).toLowerCase();
+
+        
+        if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
+          const { execFileSync } = require('child_process');
+          const py = path.join(__dirname, 'tools', 'convertidor.py');
+          const outXlsx = filePath + '.converted.xlsx';
+          try {
+         
+            try {
+              execFileSync('python', [py, filePath, outXlsx], { stdio: 'inherit' });
+            } catch (innerErr) {
+           
+              execFileSync('py', [py, filePath, outXlsx], { stdio: 'inherit' });
+            }
+          
+            filePath = outXlsx;
+            convertedXlsxPath = outXlsx;
+          } catch (err) {
+            console.error('Error convirtiendo PDF a XLSX:', err);
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            return res.status(500).json({ error: 'Error convirtiendo PDF a XLSX', detalle: String(err) });
+          }
+        }
+
         const workbook = XLSX.readFile(filePath);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
@@ -155,30 +180,29 @@ const extraerSemana = (row) => {
         const wbFinal = new ExcelJS.Workbook();
 
         
-  // Creacion de las hojas .xlsx
   sheets.crearHojaDistribucionProductos(wbFinal, datosFinales);
   sheets.crearHojaDisbud(wbFinal, datosFinales);
   sheets.crearHojaGirasol(wbFinal, datosFinales);
   sheets.crearHojaPruebaFloracion(wbFinal, datosFinales);
   sheets.crearHojaNochesLuz(wbFinal, datosCrudos, { variedades });
 
-        // Guardar archivo final o generar PDF según query param
         const wantPdf = String(req.query.format || '').toLowerCase() === 'pdf';
 
-        if (!wantPdf) {
+          if (!wantPdf) {
           const outputPath = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
           await wbFinal.xlsx.writeFile(outputPath);
           console.log("Reporte completo generado:", outputPath);
           res.download(outputPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
               if (err) console.error("Error enviando el archivo:", err);
               try { fs.unlinkSync(outputPath); } catch(e){}
+              try { if (fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath); } catch(e){}
+              try { if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath); } catch(e){}
           });
         } else {
           if (!puppeteer) {
             return res.status(400).json({ error: 'PDF generation not available: puppeteer not installed on the server.' });
           }
 
-          // Convert each worksheet to a simple HTML table and concatenate
           function sheetToHTML(sheet) {
             const rows = [];
             sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
@@ -192,7 +216,6 @@ const extraerSemana = (row) => {
             return `<h2>${sheet.name}</h2><table border="1" style="border-collapse:collapse; width:100%">${rows.join('')}</table><div style="page-break-after:always"></div>`;
           }
 
-          // build HTML
           const htmlParts = ['<html><head><meta charset="utf-8"><style>table,td{font-family:Arial,sans-serif;font-size:10px;padding:4px}</style></head><body>'];
           wbFinal.eachSheet(sheet => {
             htmlParts.push(sheetToHTML(sheet));
@@ -200,7 +223,6 @@ const extraerSemana = (row) => {
           htmlParts.push('</body></html>');
           const finalHtml = htmlParts.join('\n');
 
-          // render PDF with puppeteer
           const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
           const page = await browser.newPage();
           await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
@@ -213,11 +235,11 @@ const extraerSemana = (row) => {
           res.setHeader('Content-Disposition', `attachment; filename="Reporte_Siembra_${semanaActual}.pdf"`);
           res.sendFile(path.resolve(outputPdf), (err) => {
             try { fs.unlinkSync(outputPdf); } catch(e){}
+            try { if (fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath); } catch(e){}
+            try { if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath); } catch(e){}
           });
         }
 
-        // borrar archivo subido
-        try { fs.unlinkSync(filePath); } catch(e){}
 
     } catch (error) {
         console.error("Error procesando Excel:", error);
