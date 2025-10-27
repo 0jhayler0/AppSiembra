@@ -105,7 +105,7 @@ function clasificarVariedad(nombre) {
   if (!nombre || typeof nombre !== "string") return "Desconocido";
   const lower = nombre.toLowerCase();
   if (lower.includes("prueba de floracion")) return "Prueba de Floracion";
-  if (lower.includes("cremon") || lower.includes("spider") || lower.includes("anastasia") || lower.includes("tutu")|| lower.includes("towi"))
+  if (lower.includes("cremon") || lower.includes("spider") || lower.includes("anastasia") || lower.includes("tutu") || lower.includes("towi"))
     return "Disbud";
   if (lower.includes("vincent choice") || lower.includes("girasol")) return "Girasol";
   return "Normal";
