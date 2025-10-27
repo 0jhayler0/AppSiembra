@@ -4,7 +4,7 @@ module.exports = function crearHojaDistribucionProductos(workbook, datos) {
 
   datos.forEach(row => {
     const seccion = row.Seccion || "Sin Sección";
-    const tipo = (row.Variedad && typeof row.Variedad === 'string') ? (row.Variedad.toLowerCase().includes('vincent choice') ? 'Girasol' : (row.Variedad.toLowerCase().includes('prueba de floracion') ? 'Prueba de Floracion' : (row.Variedad.toLowerCase().includes('cremon')||row.Variedad.toLowerCase().includes('spider') ? 'Disbud' : 'Normal'))) : 'Normal';
+    const tipo = (row.Variedad && typeof row.Variedad === 'string') ? (row.Variedad.toLowerCase().includes('vincent choice') ? 'Girasol' : (row.Variedad.toLowerCase().includes('prueba de floracion') ? 'Prueba de Floracion' : (row.Variedad.toLowerCase().includes('cremon')||row.Variedad.toLowerCase().includes('spider')||row.Variedad.toLowerCase().includes('towi')||row.Variedad.toLowerCase().includes('tutu') ? 'Disbud' : 'Normal'))) : 'Normal';
     const largo = parseFloat(row.Largo) || 0;
     const nave = row.Nave?.toString().trim() || "Sin Nave";
 

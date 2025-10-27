@@ -77,10 +77,10 @@ function App() {
     if (!droppedFile) return;
 
     const name = String(droppedFile.name).toLowerCase();
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")|| name.endsWith(".pdf")) {
       setFile(droppedFile);
     } else {
-      alert("Solo se permiten archivos Excel (.xlsx, .xls)");
+      alert("Solo se permiten archivos Excel o PDF");
     }
 
     setTimeout(() => setIsDropping(false), 300);

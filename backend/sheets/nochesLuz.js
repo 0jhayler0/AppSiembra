@@ -165,7 +165,7 @@ module.exports = function crearHojaNochesLuz(workbook, datos, opts = {}) {
     });
 
     const eraActual = A.Era || B.Era || "";
-    if (eraAnterior <= 3 && eraActual >= 4 || eraAnterior >=4 && eraActual <=3) {
+    if (eraAnterior >=4 && eraActual <=3) {
       nuevaFila.eachCell(cell => {
         cell.border = {
           top: { style: 'thick', color: { argb: 'FF000000' } }
