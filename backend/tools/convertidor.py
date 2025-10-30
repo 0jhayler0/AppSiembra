@@ -41,8 +41,8 @@ def extraer_filas(texto):
     lineas = [l.strip() for l in texto.splitlines() if l.strip()]
 
     patron_fila = re.compile(
-        r"(?:(\d{1,2})\s+)?(\d+)\s+([A-Za-z0-9() ,.'\-]+?)\s+(\d{1,2}\.\d)\s+(\d{2}-[A-Za-z]{3})\s+(\d{2}-[A-Za-z]{3})",
-        re.IGNORECASE
+        r"(?:(\d{1,2})\s+)?(\d+)\s+(.+?)\s+(\d{1,2}\.\d)\s+(\d{2}-[A-Za-z]{3})\s+(\d{2}-[A-Za-z]{3})",
+        re.IGNORECASE | re.DOTALL
     )
 
     nave_actual = None
@@ -108,9 +108,6 @@ def extraer_filas(texto):
     return filas
 
 
-
-
-
 def dividir_lados(filas):
     """
     Divide las filas alternando entre lado A y lado B.
@@ -161,7 +158,7 @@ def main():
             print(f"✅ Sección {b['seccion']}: {len(lado_a)} A + {len(lado_b)} B")
 
             # Fila del título
-            todas_filas.append([titulo] + [""] * 11)
+            todas_filas.append([titulo] + [""] * 12)
             # Encabezados
             todas_filas.append([
                 "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte",

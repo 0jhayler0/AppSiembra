@@ -6,6 +6,8 @@ function App() {
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isDropping, setIsDropping] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const inputRef = useRef(null);
 
   const downloadBlob = (blob, dispositionFallback) => {
@@ -26,6 +28,9 @@ function App() {
     link.remove();
     window.URL.revokeObjectURL(url);
     setFile(null);
+    setIsProcessing(false);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const handleUpload = async (format = 'xlsx') => {
@@ -34,6 +39,8 @@ function App() {
     formData.append("file", file);
 
     try {
+      setIsProcessing(true);
+
       const res = await axios.post(`http://localhost:5000/upload-excel?format=${format}`, formData, {
         responseType: "blob",
         headers: { "Content-Type": "multipart/form-data" },
@@ -76,17 +83,12 @@ function App() {
     if (!droppedFile) return;
 
     const name = String(droppedFile.name).toLowerCase();
-<<<<<<< HEAD
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")|| name.endsWith(".pdf")) {
-      setFile(droppedFile);
-    } else {
-      alert("Solo se permiten archivos Excel o PDF");
-=======
+
     if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
       setFile(droppedFile);
     } else {
       alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
->>>>>>> 019b169a8396b76809605fc444b04d2a2d83fc46
+
     }
 
     setTimeout(() => setIsDropping(false), 300);
@@ -104,7 +106,7 @@ function App() {
   return (
     <section className="mainContainer">
       <div
-        className={`principalContainer ${isDragging ? "dragging" : ""}`}
+        className={`principalContainer ${isDragging ? "dragging" : ""} ${isProcessing ? "rotating" : ""}`}
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -134,7 +136,7 @@ function App() {
           {file ? (
             <p style={{ color: "#23a523", margin: 0 }}>📄 Archivo seleccionado: {file.name}</p>
           ) : (
-            <p style={{ color: "#666", margin: 0 }}></p>
+            <p className="pointsAnimation" style={{ color: "#666", margin: 0, fontSize: 15, fontFamily: "monospace"}}>Esperando el archivo<span>.</span><span>.</span><span>.</span></p>
           )}
         </div>
       </div>
@@ -147,6 +149,7 @@ function App() {
             Descargar en PDF
           </button>
         </div>
+        {showSuccess && <div className="toast">✅ Reporte realizado con éxito</div>} 
     </section>
   );
 }

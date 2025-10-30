@@ -1,10 +1,10 @@
 :root{
   --border-size: 6px;     
   --radius: 12px;         
-  --dash-angle: 15deg;     
-  --dash-gap: 15deg;       
+  --dash-angle: 90deg;     
+  --dash-gap: 90deg;       
   --border-color: #23a523; 
-  --speed: 10s;           
+  --speed: 5s;
 }
 
 
@@ -40,15 +40,19 @@
   overflow: hidden; 
   transition: all ease-in-out 500ms;          
 }
+.principalContainer.rotating::before{
+  animation: rotateBorder var(--speed) linear infinite;
+}
 
 
 .principalContainer::before{
   content: "";
   position: absolute;
-  width: 300%;
-  height: 300%;
-  border-radius: calc(var(--radius) + var(--border-size));
+  width: 200%;
+  height: 200%;
+  border-radius: 50%;
   z-index: 0;
+  animation: none;
 
   background: repeating-conic-gradient(
     from 0deg,
@@ -56,7 +60,6 @@
     transparent var(--dash-angle) calc(var(--dash-angle) + var(--dash-gap))
   );
 
-  animation: rotateBorder var(--speed) linear infinite;
   pointer-events: none;
 }
 
@@ -88,6 +91,8 @@
   font-size: 0.9rem;
   transition: all ease-in-out 500ms;
 }
+
+
 
 .principalContainer > * {
   position: relative;
@@ -133,3 +138,37 @@ button {
   background-color: #ff5722;
 }
 
+.toast {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  background-color: #23a523;
+  color: white;
+  padding: 15px 25px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  font-size: 1rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  animation: fadeInOut 3s ease-in-out forwards;
+  z-index: 1000;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(20px); }
+  10%, 90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(20px); }
+}
+
+.pointsAnimation span {
+  animation: blink 2s infinite;
+}
+
+.pointsAnimation span:nth-child(1) { animation-delay: 0.2s; }
+.pointsAnimation span:nth-child(2) { animation-delay: 0.4s; }
+.pointsAnimation span:nth-child(3) { animation-delay: 0.6s; }
+
+@keyframes blink {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
