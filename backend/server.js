@@ -12,10 +12,11 @@ const upload = multer({ dest: path.join(__dirname, 'output', 'uploads') });
 const cors = require('cors');
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', process.env.FRONTEND_URL || ''],  // Agrega la URL del frontend en producción aquí
   methods: ['GET','POST','OPTIONS'],
   exposedHeaders: ['Content-Disposition']
 }));
+
 
 let puppeteer = null;
 try {
@@ -248,6 +249,6 @@ const extraerSemana = (row) => {
     }
 });
 
-app.listen(5000, () =>
-  console.log("🚀 Servidor corriendo en http://localhost:5000")
-);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
+
