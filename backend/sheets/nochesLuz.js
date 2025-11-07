@@ -153,14 +153,14 @@ module.exports = function crearHojaNochesLuz(workbook, datos, opts = {}) {
       NaveA: A.Nave || "",
       EraA: A.Era || "",
       VarA: A.Variedad || "",
-      SiembraA: fechaA ? formatDateDDMMYYYY(fechaA) : (A.Fecha_Siembra || ""),
-      NochesA: fechaMasNochesA ? formatDateDDMMYYYY(fechaMasNochesA) : "",
+      SiembraA: fechaA ? formatDateDDMMYYYY(fechaA).slice(0,5) : (A.Fecha_Siembra || ""),
+      NochesA: fechaMasNochesA ? formatDateDDMMYYYY(fechaMasNochesA).slice(0,5) : "",
       CorteA: A.Inicio_Corte || "",
       NaveB: B.Nave || "",
       EraB: B.Era || "",
       VarB: B.Variedad || "",
-      SiembraB: fechaB ? formatDateDDMMYYYY(fechaB) : (B.Fecha_Siembra || ""),
-      NochesB: fechaMasNochesB ? formatDateDDMMYYYY(fechaMasNochesB) : "",
+      SiembraB: fechaB ? formatDateDDMMYYYY(fechaB).slice(0,5) : (B.Fecha_Siembra || ""),
+      NochesB: fechaMasNochesB ? formatDateDDMMYYYY(fechaMasNochesB).slice(0,5) : "",
       CorteB: B.Inicio_Corte || ""
     });
 

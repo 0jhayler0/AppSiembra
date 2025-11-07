@@ -77,31 +77,35 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No se envió ningún archivo" });
 
-    const originalUploadPath = req.file.path; 
+    const originalUploadPath = req.file.path;
     let filePath = originalUploadPath;
     let convertedXlsxPath = null;
+    let pdfPath = null;
         const originalName = req.file.originalname || '';
         const ext = path.extname(originalName).toLowerCase();
 
-        
+
         if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
           const { execFileSync } = require('child_process');
           const py = path.join(__dirname, 'tools', 'convertidor.py');
+          pdfPath = filePath + '.pdf';
+          fs.renameSync(filePath, pdfPath);
+          filePath = pdfPath;
           const outXlsx = filePath + '.converted.xlsx';
           try {
-         
+
             try {
               execFileSync('python', [py, filePath, outXlsx], { stdio: 'inherit' });
             } catch (innerErr) {
-           
+
               execFileSync('py', [py, filePath, outXlsx], { stdio: 'inherit' });
             }
-          
+
             filePath = outXlsx;
             convertedXlsxPath = outXlsx;
           } catch (err) {
             console.error('Error convirtiendo PDF a XLSX:', err);
-            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            try { fs.unlinkSync(pdfPath); } catch (e) {}
             return res.status(500).json({ error: 'Error convirtiendo PDF a XLSX', detalle: String(err) });
           }
         }
@@ -198,6 +202,7 @@ const extraerSemana = (row) => {
               try { fs.unlinkSync(outputPath); } catch(e){}
               try { if (fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath); } catch(e){}
               try { if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath); } catch(e){}
+              try { if (pdfPath && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath); } catch(e){}
           });
         } else {
           if (!puppeteer) {
@@ -238,6 +243,7 @@ const extraerSemana = (row) => {
             try { fs.unlinkSync(outputPdf); } catch(e){}
             try { if (fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath); } catch(e){}
             try { if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath); } catch(e){}
+            try { if (pdfPath && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath); } catch(e){}
           });
         }
 

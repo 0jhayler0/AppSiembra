@@ -4,7 +4,7 @@ import pdfplumber
 import pandas as pd
 import sys
 import os
-from tabulate import tabulate  # pip install tabulate
+from tabulate import tabulate  
 
 # === Funciones auxiliares ===
 
@@ -188,10 +188,6 @@ def main():
 
     # Crear DataFrame
     df = pd.DataFrame(todas_filas)
-
-    # Mostrar en consola (primeras 40 filas)
-    print("\n📋 Vista previa de tabla generada:\n")
-    print(tabulate(df, tablefmt="grid", showindex=False))
 
     # Exportar a Excel
     df.to_excel(output_xlsx, index=False, header=False)
