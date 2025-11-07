@@ -2,10 +2,12 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "cd ../frontend/app-siembra && npm install && npm run build && xcopy dist ..\\..\\backend\\dist /E /I /Y",
+    "dev": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +21,8 @@
     "pdfreader": "^3.0.7",
     "puppeteer": "^24.26.0",
     "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

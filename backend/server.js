@@ -17,6 +17,9 @@ app.use(cors({
   exposedHeaders: ['Content-Disposition']
 }));
 
+// Servir archivos estáticos del frontend
+app.use(express.static(path.join(__dirname, 'dist')));
+
 
 let puppeteer = null;
 try {
@@ -253,6 +256,14 @@ const extraerSemana = (row) => {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ error: "Error procesando el archivo", detalle: error.message });
     }
+});
+
+// SPA fallback: enviar index.html para rutas no encontradas (después de static)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
