@@ -1,199 +1,290 @@
 #!/usr/bin/env python3
-import re
-import pdfplumber
-import pandas as pd
+"""
+Convertidor robusto de PDF a XLSX con múltiples estrategias de extracción.
+Intenta Camelot → PyMuPDF → pdfplumber con fallback automático.
+"""
 import sys
 import os
-from tabulate import tabulate  
+import re
+import time
+import pandas as pd
+import warnings
 
-# === Funciones auxiliares ===
+# Suprimir advertencias de dependencias opcionales
+warnings.filterwarnings('ignore')
 
-def extraer_bloques(texto):
-    """
-    Separa el PDF en bloques por secciones detectando el encabezado:
-    'Flores de la Victoria S.A.S Semana Siembra XXXX Seccion: XX'
-    """
-    patron = re.compile(
-        r"(Flores de la Victoria S\.A\.S Semana Siembra\s+(\d+)\s+Seccion:\s*(\d+))",
-        re.IGNORECASE
-    )
-    bloques = []
-    coincidencias = list(patron.finditer(texto))
-    for i, match in enumerate(coincidencias):
-        inicio = match.end()
-        fin = coincidencias[i + 1].start() if i + 1 < len(coincidencias) else len(texto)
-        contenido = texto[inicio:fin].strip()
-        bloques.append({
-            "titulo": match.group(1).strip(),
-            "semana": match.group(2),
-            "seccion": match.group(3),
-            "contenido": contenido
-        })
-    return bloques
+# Estrategia 1: Camelot (mejor para tablas)
+try:
+    import camelot
+    CAMELOT_AVAILABLE = True
+except ImportError:
+    CAMELOT_AVAILABLE = False
 
-def extraer_filas(texto):
-    """
-    Extrae filas completas del bloque (lado A y B).
-    Si un lado no existe, genera celdas vacías para mantener la estructura.
-    Detecta variedades con paréntesis, comas, puntos, guiones, etc.
-    """
-    filas = []
-    lineas = [l.strip() for l in texto.splitlines() if l.strip()]
+# Estrategia 2: PyMuPDF
+try:
+    import fitz
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
 
-    patron_fila = re.compile(
-        r"(?:(\d{1,2})\s+)?(\d+)\s+(.+?)\s+(\d{1,2}\.\d)\s+(\d{2}-[A-Za-z]{3})\s+(\d{2}-[A-Za-z]{3})",
-        re.IGNORECASE | re.DOTALL
-    )
+# Estrategia 3: pdfplumber (fallback final)
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    PDFPLUMBER_AVAILABLE = False
 
-    nave_actual = None
+def normalizar_celda(celda):
+    """Normaliza contenido de celda."""
+    if celda is None:
+        return ""
+    celda_str = str(celda).strip()
+    # Eliminar saltos de línea múltiples y espacios extra
+    celda_str = re.sub(r'\s+', ' ', celda_str)
+    return celda_str
 
-    for linea in lineas:
-        partes = patron_fila.findall(linea)
+def extraer_con_camelot(pdf_path):
+    """Intenta extraer usando Camelot (mejor para tablas regulares)."""
+    if not CAMELOT_AVAILABLE:
+        return None
+    
+    try:
+        print("📊 Intentando extracción con Camelot...")
+        
+        # Intenta con diferentes "flavors"
+        for flavor in ['lattice', 'stream']:
+            try:
+                tables = camelot.read_pdf(pdf_path, pages='all', flavor=flavor)
+                if tables:
+                    print(f"   ✅ Camelot encontró {len(tables)} tabla(s) con flavor='{flavor}'")
+                    return tables
+            except:
+                continue
+        
+        return None
+    except Exception as e:
+        print(f"   ⚠️ Camelot falló: {e}")
+        return None
 
-        # si no hay nada reconocible, ignoramos la línea
-        if not partes:
-            continue
+def extraer_con_pymupdf(pdf_path):
+    """Intenta extraer usando PyMuPDF (muy robusto)."""
+    if not PYMUPDF_AVAILABLE:
+        return None
+    
+    try:
+        print("📊 Intentando extracción con PyMuPDF...")
+        doc = fitz.open(pdf_path)
+        resultados = []
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            try:
+                tables = page.find_tables()
+                
+                for tabla in tables:
+                    datos = tabla.extract()
+                    if datos:
+                        resultados.append({
+                            'datos': datos,
+                            'page': page_num,
+                            'texto': page.get_text()
+                        })
+            except:
+                pass
+        
+        doc.close()
+        
+        if resultados:
+            print(f"   ✅ PyMuPDF encontró {len(resultados)} tabla(s)")
+            return resultados
+        
+        return None
+    except Exception as e:
+        print(f"   ⚠️ PyMuPDF falló: {e}")
+        return None
 
-        # Caso 1: dos coincidencias → lado A y B en la misma línea
-        if len(partes) == 2:
-            match_a, match_b = partes
+def extraer_con_pdfplumber(pdf_path):
+    """Intenta extraer usando pdfplumber (extracción mejorada)."""
+    if not PDFPLUMBER_AVAILABLE:
+        return None
+    
+    try:
+        print("📊 Intentando extracción con pdfplumber...")
+        
+        with pdfplumber.open(pdf_path) as pdf:
+            resultados = []
+            
+            for page_idx, page in enumerate(pdf.pages):
+                # Usar extract_tables() con configuración específica
+                try:
+                    tables = page.extract_tables(
+                        table_settings={
+                            "vertical_strategy": "lines_strict",
+                            "horizontal_strategy": "lines_strict",
+                        }
+                    )
+                    
+                    if not tables:
+                        # Fallback a estrategia más laxa
+                        tables = page.extract_tables()
+                    
+                    if tables:
+                        for tabla in tables:
+                            resultados.append({
+                                'datos': tabla,
+                                'page': page_idx,
+                                'texto': page.extract_text()
+                            })
+                except:
+                    pass
+            
+            if resultados:
+                print(f"   ✅ pdfplumber encontró {len(resultados)} tabla(s)")
+                return resultados
+        
+        return None
+    except Exception as e:
+        print(f"   ⚠️ pdfplumber falló: {e}")
+        return None
 
-            nave_a = match_a[0] if match_a[0] else nave_actual
-            nave_actual = nave_a
-
-            nave_b = match_b[0] if match_b[0] else nave_actual
-
-            filas.append({
-                "A": {
-                    "Nave": nave_a or "",
-                    "Era": match_a[1],
-                    "Variedad": match_a[2].strip(),
-                    "Largo": match_a[3],
-                    "Fecha_Siembra": match_a[4],
-                    "Inicio_Corte": match_a[5]
-                },
-                "B": {
-                    "Nave": nave_b or "",
-                    "Era": match_b[1],
-                    "Variedad": match_b[2].strip(),
-                    "Largo": match_b[3],
-                    "Fecha_Siembra": match_b[4],
-                    "Inicio_Corte": match_b[5]
-                }
-            })
-
-        # Caso 2: solo un lado → llenamos el otro con vacío
-        elif len(partes) == 1:
-            match = partes[0]
-            nave = match[0] if match[0] else nave_actual
-            nave_actual = nave
-
-            lado_a = {
-                "Nave": nave or "",
-                "Era": match[1],
-                "Variedad": match[2].strip(),
-                "Largo": match[3],
-                "Fecha_Siembra": match[4],
-                "Inicio_Corte": match[5]
-            }
-
-            # Crea el otro lado vacío (por estructura)
-            lado_b = {
-                "Nave": "", "Era": "", "Variedad": "", "Largo": "",
-                "Fecha_Siembra": "", "Inicio_Corte": ""
-            }
-
-            filas.append({"A": lado_a, "B": lado_b})
-
-    return filas
-
-
-def dividir_lados(filas):
-    """
-    Divide las filas alternando entre lado A y lado B.
-    Si hay más del doble, se empareja secuencialmente.
-    """
-    lado_a, lado_b = [], []
-    for i, fila in enumerate(filas):
-        if i % 2 == 0:
-            lado_a.append(fila)
+def procesar_tablas(tablas, fuente="desconocida"):
+    """Procesa tablas extraídas en formato estándar."""
+    filas_totales = []
+    bloques_count = 0
+    
+    for item in (tablas if isinstance(tablas, list) else []):
+        bloques_count += 1
+        
+        # Obtener datos según la fuente
+        if hasattr(item, 'df'):  # Camelot
+            datos = item.df.values.tolist()
+            titulo = "Tabla extraída con Camelot"
+        elif isinstance(item, dict) and 'datos' in item:  # PyMuPDF o pdfplumber
+            datos = item['datos']
+            texto = item.get('texto', '')
+            
+            # Intentar extraer título del texto
+            patron = re.compile(
+                r"Flores de la Victoria S\.A\.S Semana Siembra\s+(\d+)\s+Seccion:\s*(\d+)",
+                re.IGNORECASE
+            )
+            match = patron.search(texto)
+            titulo = match.group(0) if match else f"Tabla extraída con {fuente}"
         else:
-            lado_b.append(fila)
-    return lado_a, lado_b
-
-# === Función principal ===
+            datos = item if isinstance(item, list) else []
+            titulo = f"Tabla extraída con {fuente}"
+        
+        if not datos:
+            continue
+        
+        print(f"   📊 Bloque {bloques_count}: {len(datos)} fila(s)")
+        
+        # Agregar título
+        filas_totales.append([titulo] + [""] * 11)
+        filas_totales.append([
+            "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte",
+            "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte"
+        ])
+        
+        # Agregar datos normalizados
+        for fila in datos:
+            fila_norm = [normalizar_celda(c) for c in fila]
+            while len(fila_norm) < 12:
+                fila_norm.append("")
+            filas_totales.append(fila_norm[:12])
+        
+        filas_totales.append([""] * 12)
+    
+    return filas_totales, bloques_count
 
 def main():
     if len(sys.argv) < 3:
-        print("Uso: python convertidor.py input.pdf output.xlsx")
+        print("Uso: python convertidor_robusto.py input.pdf output.xlsx")
         sys.exit(1)
 
     input_pdf = sys.argv[1]
     output_xlsx = sys.argv[2]
 
     if not os.path.exists(input_pdf):
-        print("❌ No se encontró el archivo PDF.")
+        print(f"❌ Archivo no encontrado: {input_pdf}")
+        print(f"   Ruta: {os.path.abspath(input_pdf)}")
         sys.exit(2)
 
+    print(f"🔍 Procesando: {os.path.abspath(input_pdf)}\n")
+    start_time = time.time()
     todas_filas = []
-    semana_detectada = None
+    bloques_procesados = 0
+    metodo_usado = ""
 
-    with pdfplumber.open(input_pdf) as pdf:
-        texto_total = ""
-        for page in pdf.pages:
-            texto_total += page.extract_text() + "\n"
+    # Mostrar disponibilidad de motores
+    print("📦 Motores disponibles:")
+    print(f"   - Camelot: {'✅' if CAMELOT_AVAILABLE else '❌'}")
+    print(f"   - PyMuPDF: {'✅' if PYMUPDF_AVAILABLE else '❌'}")
+    print(f"   - pdfplumber: {'✅' if PDFPLUMBER_AVAILABLE else '❌'}\n")
 
-        bloques = extraer_bloques(texto_total)
-        if not bloques:
-            print("⚠️ No se encontraron bloques de secciones en el PDF.")
-            sys.exit(3)
+    # Estrategia 1: Camelot
+    if CAMELOT_AVAILABLE and not todas_filas:
+        try:
+            tablas = extraer_con_camelot(input_pdf)
+            if tablas:
+                todas_filas, bloques_procesados = procesar_tablas(tablas, "Camelot")
+                metodo_usado = "Camelot"
+                print(f"✅ Extracción exitosa con Camelot\n")
+        except Exception as e:
+            print(f"⚠️ Camelot falló: {e}\n")
 
-        for b in bloques:
-            titulo = b["titulo"]
-            semana_detectada = b["semana"]
-            filas = extraer_filas(b["contenido"])
-            lado_a, lado_b = dividir_lados(filas)
-            max_len = max(len(lado_a), len(lado_b))
+    # Estrategia 2: PyMuPDF (si Camelot no funcionó)
+    if not todas_filas and PYMUPDF_AVAILABLE:
+        try:
+            tablas = extraer_con_pymupdf(input_pdf)
+            if tablas:
+                todas_filas, bloques_procesados = procesar_tablas(tablas, "PyMuPDF")
+                metodo_usado = "PyMuPDF"
+                print(f"✅ Extracción exitosa con PyMuPDF\n")
+        except Exception as e:
+            print(f"⚠️ PyMuPDF falló: {e}\n")
 
-            print(f"✅ Sección {b['seccion']}: {len(lado_a)} A + {len(lado_b)} B")
+    # Estrategia 3: pdfplumber
+    if not todas_filas and PDFPLUMBER_AVAILABLE:
+        try:
+            tablas = extraer_con_pdfplumber(input_pdf)
+            if tablas:
+                todas_filas, bloques_procesados = procesar_tablas(tablas, "pdfplumber")
+                metodo_usado = "pdfplumber"
+                print(f"✅ Extracción exitosa con pdfplumber\n")
+        except Exception as e:
+            print(f"⚠️ pdfplumber falló: {e}\n")
 
-            # Fila del título
-            todas_filas.append([titulo] + [""] * 12)
-            # Encabezados
-            todas_filas.append([
-                "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte",
-                "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte"
-            ])
-
-            
-            # Rellenar filas
-            for registro in filas:
-                a = registro["A"]
-                b = registro["B"]
-
-                fila = [
-                    a.get("Nave", ""), a.get("Era", ""), a.get("Variedad", ""), a.get("Largo", ""),
-                    a.get("Fecha_Siembra", ""), a.get("Inicio_Corte", ""),
-                    b.get("Nave", ""), b.get("Era", ""), b.get("Variedad", ""), b.get("Largo", ""),
-                    b.get("Fecha_Siembra", ""), b.get("Inicio_Corte", "")
-                ]
-
-                todas_filas.append(fila)
-
-
-            # Espacio entre secciones
-            todas_filas.append([""] * 12)
-
-            
-
-    # Crear DataFrame
-    df = pd.DataFrame(todas_filas)
+    if not todas_filas:
+        print("❌ No se pudieron extraer datos con ninguna estrategia.")
+        print("   Por favor, instala al menos una de estas dependencias:")
+        print("   - pip install camelot-py")
+        print("   - pip install PyMuPDF")
+        print("   - pip install pdfplumber")
+        sys.exit(3)
 
     # Exportar a Excel
-    df.to_excel(output_xlsx, index=False, header=False)
-    print(f"\n🎉 Archivo Excel generado correctamente → {output_xlsx}")
-    if semana_detectada:
-        print(f"🗓 Semana detectada: {semana_detectada}")
+    try:
+        df = pd.DataFrame(todas_filas)
+        df.to_excel(output_xlsx, index=False, header=False)
+        
+        end_time = time.time()
+        elapsed = end_time - start_time
+        
+        print(f"🎉 Archivo generado → {output_xlsx}")
+        print(f"📊 Total filas en Excel: {len(todas_filas)}")
+        print(f"📦 Bloques procesados: {bloques_procesados}")
+        print(f"🔧 Método utilizado: {metodo_usado}")
+        print(f"⏱️ Tiempo total: {elapsed:.2f} segundos")
+        
+        return 0
+
+    except Exception as e:
+        print(f"❌ Error exportando Excel: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(4)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

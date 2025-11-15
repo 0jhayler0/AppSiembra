@@ -1,3 +1,46 @@
+// Función auxiliar para agrupar naves consecutivas
+function agruparNavesConsecutivas(navesPorSeccion) {
+  if (!navesPorSeccion || navesPorSeccion.size === 0) return "";
+  
+  // Convertir Set a array de números, eliminar duplicados y ordenar
+  const naves = [...new Set(
+    Array.from(navesPorSeccion)
+      .map(s => parseInt(s))
+      .filter(n => !isNaN(n))
+  )].sort((a, b) => a - b);
+  
+  if (naves.length === 0) return "";
+  
+  const grupos = [];
+  let inicio = naves[0];
+  let fin = naves[0];
+  
+  for (let i = 1; i < naves.length; i++) {
+    if (naves[i] === fin + 1) {
+      // Es consecutiva, extender el rango
+      fin = naves[i];
+    } else {
+      // No es consecutiva, guardar el grupo anterior
+      if (inicio === fin) {
+        grupos.push(inicio.toString());
+      } else {
+        grupos.push(`${inicio} a la ${fin}`);
+      }
+      inicio = naves[i];
+      fin = naves[i];
+    }
+  }
+  
+  // Guardar el último grupo
+  if (inicio === fin) {
+    grupos.push(inicio.toString());
+  } else {
+    grupos.push(`${inicio} a la ${fin}`);
+  }
+  
+  return grupos.join(", ");
+}
+
 module.exports = function crearHojaDistribucionProductos(workbook, datos) {
   const metrosPorSeccion = {};
   const navesPorSeccion = {};
@@ -43,9 +86,9 @@ module.exports = function crearHojaDistribucionProductos(workbook, datos) {
   const borderLarge = { top: { style: 'thin', color: { argb: 'FFFF8C00' } }, left: { style: 'thin', color: { argb: 'FFFF8C00' } }, bottom: { style: 'thin', color: { argb: 'FFFF8C00' } }, right: { style: 'thin', color: { argb: 'FFFF8C00' } } };
 
   Object.entries(metrosPorSeccionEnEras).forEach(([seccion, valores]) => {
-    const naves = Array.from(navesPorSeccion[seccion] || []).sort().join(", ");
+    const naves = agruparNavesConsecutivas(navesPorSeccion[seccion]);
     const row = sheet.addRow({ seccion, naves, eras: (parseFloat(valores.Disbud||0)+parseFloat(valores.Girasol||0)+parseFloat(valores.Normal||0)+parseFloat(valores["Prueba de Floracion"]||0)).toFixed(2), pompon: valores.Normal, disbud: valores.Disbud, girasol: valores.Girasol, floracion: valores["Prueba de Floracion"], total: (parseFloat(valores.Disbud||0)+parseFloat(valores.Girasol||0)+parseFloat(valores.Normal||0)+parseFloat(valores["Prueba de Floracion"]||0)).toFixed(2) });
-    const navesCount = naves ? naves.split(",").map(s => s.trim()).filter(Boolean).length : 0;
+    const navesCount = naves ? naves.split(",").length : 0;
     const chosenBorder = navesCount <= 3 ? borderSmall : borderLarge;
     row.eachCell(cell => { cell.border = chosenBorder; });
   });

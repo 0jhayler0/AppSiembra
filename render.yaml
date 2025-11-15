@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: appsiembra-backend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://your-frontend-url.onrender.com
+    rootDir: backend

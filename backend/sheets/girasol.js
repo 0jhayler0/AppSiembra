@@ -1,5 +1,48 @@
 const { parseInicioCorteToDate, getISOWeek, clasificarVariedad } = require('./helpers');
 
+// Función auxiliar para agrupar naves consecutivas
+function agruparNavesConsecutivas(navesPorSeccion) {
+  if (!navesPorSeccion || navesPorSeccion.size === 0) return "";
+  
+  // Convertir Set a array de números, eliminar duplicados y ordenar
+  const naves = [...new Set(
+    Array.from(navesPorSeccion)
+      .map(s => parseInt(s))
+      .filter(n => !isNaN(n))
+  )].sort((a, b) => a - b);
+  
+  if (naves.length === 0) return "";
+  
+  const grupos = [];
+  let inicio = naves[0];
+  let fin = naves[0];
+  
+  for (let i = 1; i < naves.length; i++) {
+    if (naves[i] === fin + 1) {
+      // Es consecutiva, extender el rango
+      fin = naves[i];
+    } else {
+      // No es consecutiva, guardar el grupo anterior
+      if (inicio === fin) {
+        grupos.push(inicio.toString());
+      } else {
+        grupos.push(`${inicio} a la ${fin}`);
+      }
+      inicio = naves[i];
+      fin = naves[i];
+    }
+  }
+  
+  // Guardar el último grupo
+  if (inicio === fin) {
+    grupos.push(inicio.toString());
+  } else {
+    grupos.push(`${inicio} a la ${fin}`);
+  }
+  
+  return grupos.join(", ");
+}
+
 module.exports = function crearHojaGirasol(workbook, datos) {
   const girasolPorSeccion = {};
   const navesPorSeccion = {};
@@ -38,7 +81,7 @@ module.exports = function crearHojaGirasol(workbook, datos) {
     const metros = info.metros || 0;
     const eras = (metros / 30).toFixed(2);
     const estimado = Math.round(eras * 850);
-    const naves = Array.from(navesPorSeccion[seccion] || []).sort().join(', ');
+    const naves = agruparNavesConsecutivas(navesPorSeccion[seccion]);
     const fechasSiembraArr = Array.from(fechasPorSeccion[seccion].siembra).filter(Boolean);
     const fechasCorteArr = Array.from(fechasPorSeccion[seccion].corte).filter(Boolean);
     let defaultYear = (new Date()).getFullYear();
