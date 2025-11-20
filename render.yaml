@@ -12,3 +12,9 @@ services:
       - key: FRONTEND_URL
         value: https://your-frontend-url.onrender.com
     rootDir: backend
+
+  - type: web
+    name: app-siembra-converter
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python convertidor.py
