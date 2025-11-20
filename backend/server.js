@@ -11,9 +11,7 @@ const sheets = require("./sheets");
 const cors = require("cors");
 const axios = require("axios");
 const FormData = require("form-data");
-
-let puppeteer = null;
-try { puppeteer = require("puppeteer"); } catch (e) {}
+const { generarPDF } = require("./pdfshift");   // ← PDFShift aquí
 
 const app = express();
 
@@ -88,9 +86,6 @@ function extraerSemana(row) {
   return null;
 }
 
-//--------------------------------------
-// EXPANSIÓN DE VARIEDADES
-//--------------------------------------
 function expandirVariedades(row) {
   const varText = row.Variedad || "";
   const regex = /(.+?)\s*\(([\d\.]+)\)/g;
@@ -113,8 +108,9 @@ function expandirVariedades(row) {
 
   return list.length === 0 ? [row] : list;
 }
+
 //--------------------------------------
-// RUTA PRINCIPAL: /upload-excel
+// RUTA PRINCIPAL
 //--------------------------------------
 app.post("/upload-excel", upload.single("file"), async (req, res) => {
   let originalUploadPath = null;
@@ -132,7 +128,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     const ext = path.extname(originalName).toLowerCase();
 
     //--------------------------------------------
-    // SI ES PDF → CONVERTIR CON EL MICRO SERVICIO
+    // SI ES PDF → CONVERTIR A XLSX
     //--------------------------------------------
     if (ext === ".pdf") {
       pdfPath = filePath + ".pdf";
@@ -159,7 +155,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     }
 
     //--------------------------------------------
-    // LEER XLSX Y MATRIZ COMPLETA
+    // LEER EXCEL
     //--------------------------------------------
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
@@ -173,10 +169,10 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
       data.push(r);
     });
 
-    let datosLimpios = limpiarDatos(data);
+    const datosLimpios = limpiarDatos(data);
 
     //--------------------------------------------
-    // PARSEO: MÉTODO B → "LADO A" / "LADO B"
+    // PARSEO MÉTODO B (LADO A / LADO B)
     //--------------------------------------------
     const datosCrudos = [];
     let seccionActual = "N/A";
@@ -185,42 +181,34 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     for (let i = 0; i < datosLimpios.length; i++) {
       const row = datosLimpios[i];
 
-      // Semana
       const sem = extraerSemana(row);
       if (sem) {
         semanaActual = sem;
         continue;
       }
 
-      // Sección
       const sec = extraerSeccion(row);
       if (sec) {
         seccionActual = sec;
         continue;
       }
 
-      // Encabezado de bloques A/B
       const c0 = getTextFromCell(row[0]).toLowerCase();
       const c6 = getTextFromCell(row[6]).toLowerCase();
 
       if (c0 === "lado a" && c6 === "lado b") {
-
         const bloqueDatos = [];
         let j = i + 1;
 
         while (j < datosLimpios.length) {
           const r = datosLimpios[j];
-
           const r0 = getTextFromCell(r[0]).toLowerCase();
           const r6 = getTextFromCell(r[6]).toLowerCase();
           const sec2 = extraerSeccion(r);
 
-          // Nuevo bloque o nueva sección → parar
           if (sec2 || (r0 === "lado a" && r6 === "lado b")) break;
+          if (r.some(x => x !== "" && x != null)) bloqueDatos.push(r);
 
-          if (r.some(x => x !== "" && x != null)) {
-            bloqueDatos.push(r);
-          }
           j++;
         }
 
@@ -230,15 +218,14 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
           let datosCompletos = rellenarColumna(bloqueDatos, 0);
           datosCompletos = rellenarColumna(datosCompletos, 6);
 
-          // FIX: normalizar 12 columnas
           datosCompletos = datosCompletos.map(r => {
             const row = [...r];
             while (row.length < 12) row.push("");
             return row;
           });
 
-          // Procesar A/B
           let filaId = 0;
+
           for (const r of datosCompletos) {
             const A = {
               Seccion: seccionActual,
@@ -264,7 +251,6 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
               Inicio_Corte: getTextFromCell(r[11])
             };
 
-            // FIX: Nave A vacía → copiar anterior
             if (!A.Nave) {
               const prev = datosCrudos.length > 0 ? datosCrudos[datosCrudos.length - 1].Nave : "";
               A.Nave = prev || "N/A";
@@ -281,8 +267,9 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     // EXPANDIR VARIEDADES
     //--------------------------------------------
     const datosFinales = datosCrudos.flatMap(expandirVariedades);
+
     //--------------------------------------------
-    // GENERAR ARCHIVO XLSX FINAL
+    // EXPORTAR XLSX
     //--------------------------------------------
     const reporteNombre = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
     finalReportPath = `/tmp/${reporteNombre}`;
@@ -306,32 +293,20 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     await wbOut.xlsx.writeFile(finalReportPath);
 
     //--------------------------------------------
-    // GENERAR PDF (si puppeteer está disponible)
+    // GENERAR PDF CON PDFSHIFT
     //--------------------------------------------
     let pdfBuffer = null;
 
-    if (puppeteer) {
+    try {
       const html = sheets.generarHTML(datosFinales, semanaActual);
-
-      const browser = await puppeteer.launch({
-        headless: "new",
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
-      });
-
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle0" });
-
-      pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "20px", bottom: "20px" }
-      });
-
-      await browser.close();
+      pdfBuffer = await generarPDF(html);
+    } catch (err) {
+      console.error("Error generando PDF con PDFShift:", err.message);
+      pdfBuffer = null;
     }
 
     //--------------------------------------------
-    // RESPONDER AL FRONTEND
+    // RESPONDER
     //--------------------------------------------
     res.json({
       ok: true,
@@ -349,9 +324,6 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: error.message || "Error procesando archivo" });
 
   } finally {
-    //--------------------------------------------
-    // LIMPIEZA DE TEMPORALES
-    //--------------------------------------------
     try {
       if (originalUploadPath && fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath);
       if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath);
