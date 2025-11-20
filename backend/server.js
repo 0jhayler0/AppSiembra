@@ -173,8 +173,8 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     const row = datosLimpios[i];
 
     // USAMOS LA NUEVA FUNCIÓN PARA EXTRAER TEXTO DE LAS CELDAS
-    const cell0_text = getTextFromCell(row[0]);
-    const cell6_text = getTextFromCell(row[6]);
+    const cell1_text = getTextFromCell(row[1]);
+    const cell7_text = getTextFromCell(row[7]);
 
     const nuevaSemana = extraerSemana(row);
     const nuevaSeccion = extraerSeccion(row);
@@ -190,17 +190,17 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     }
 
     // AHORA LA COMPARACIÓN FUNCIONARÁ
-    if (cell0_text === "Nave" && cell6_text === "Nave") {
+    if (cell1_text === "Nave" && cell7_text === "Nave") {
         console.log(`🎯 BLOQUE 'Nave' ENCONTRADO en la fila ${i + 1}. Procesando...`);
         
         const bloqueDatos = [];
         let j = i + 1;
         while (j < datosLimpios.length) {
             const currentRow = datosLimpios[j];
-            const currentCell0_text = getTextFromCell(currentRow[0]);
-            const currentCell6_text = getTextFromCell(currentRow[6]);
+            const currentCell1_text = getTextFromCell(currentRow[1]);
+            const currentCell7_text = getTextFromCell(currentRow[7]);
 
-            if (extraerSeccion(currentRow) !== null || (currentCell0_text === "Nave" && currentCell6_text === "Nave")) break;
+            if (extraerSeccion(currentRow) !== null || (currentCell1_text === "Nave" && currentCell7_text === "Nave")) break;
             if (currentRow.some(cell => cell !== "" && cell != null)) bloqueDatos.push(currentRow);
             j++;
         }
@@ -215,8 +215,10 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
             datosCompletos.forEach(r => {
                 // AQUÍ TAMBIÉN USAMOS LA FUNCIÓN POR SI HAY CELDAS CON FORMATO
                 datosCrudos.push(
-                    { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: getTextFromCell(r[0]), Era: getTextFromCell(r[1]), Variedad: getTextFromCell(r[2]), Largo: getTextFromCell(r[3]), Fecha_Siembra: getTextFromCell(r[4]), Inicio_Corte: getTextFromCell(r[5]) },
-                    { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: getTextFromCell(r[6]), Era: getTextFromCell(r[7]), Variedad: getTextFromCell(r[8]), Largo: getTextFromCell(r[9]), Fecha_Siembra: getTextFromCell(r[10]), Inicio_Corte: getTextFromCell(r[11]) }
+                    // Lado A (índices 1 a 6)
+                    { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: getTextFromCell(r[1]), Era: getTextFromCell(r[2]), Variedad: getTextFromCell(r[3]), Largo: getTextFromCell(r[4]), Fecha_Siembra: getTextFromCell(r[5]), Inicio_Corte: getTextFromCell(r[6]) },
+                    // Lado B (índices 7 a 12)
+                    { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: getTextFromCell(r[7]), Era: getTextFromCell(r[8]), Variedad: getTextFromCell(r[9]), Largo: getTextFromCell(r[10]), Fecha_Siembra: getTextFromCell(r[11]), Inicio_Corte: getTextFromCell(r[12]) }
                 );
                 filaId++;
             });
@@ -245,9 +247,20 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
       finalReportPath = path.join('/tmp', `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`);
       await wbFinal.xlsx.writeFile(finalReportPath);
       console.log("PASO 8: Reporte XLSX generado en:", finalReportPath);
+      // DENTRO DEL IF (!wantPdf) (CORREGIDO)
       res.download(finalReportPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
-        if (err) console.error("Error enviando el archivo:", err);
-      });
+    // Este código se ejecuta DESPUÉS de que el archivo se ha enviado (o ha fallado)
+        if (err) {
+            console.error("Error enviando el archivo:", err);
+        }
+        // AHORA SÍ, borramos el archivo final porque ya no se necesita
+        console.log("Borrando reporte final después de la descarga.");
+        try { 
+            if (fs.existsSync(finalReportPath)) fs.unlinkSync(finalReportPath); 
+        } catch(e) {
+            console.error("Error borrando el reporte final:", e);
+        }
+});
     } else {
       // ... (la lógica de PDF también usaría path.join('/tmp', ...)) ...
       // Para no alargar más, asumimos que ya sabes cómo cambiar la ruta aquí también.
@@ -264,7 +277,6 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     if (originalUploadPath && fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath);
     if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath);
     if (pdfPath && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
-    if (finalReportPath && fs.existsSync(finalReportPath)) fs.unlinkSync(finalReportPath);
     console.log("Limpieza completada.");
   }
 });
