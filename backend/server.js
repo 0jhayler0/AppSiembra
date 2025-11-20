@@ -8,9 +8,9 @@ const fs = require("fs");
 const path = require("path");
 const variedades = require("./variedades");
 const sheets = require("./sheets");
-const cors = require('cors');
-const axios = require('axios');
-const FormData = require('form-data');
+const cors = require("cors");
+const axios = require("axios");
+const FormData = require("form-data");
 
 let puppeteer = null;
 try { puppeteer = require("puppeteer"); } catch (e) {}
@@ -18,7 +18,7 @@ try { puppeteer = require("puppeteer"); } catch (e) {}
 const app = express();
 
 //--------------------------------------
-// MULTER → Guardar SIEMPRE en /tmp
+// MULTER: Guardar siempre en /tmp
 //--------------------------------------
 const upload = multer({ dest: "/tmp" });
 
@@ -29,7 +29,7 @@ app.use(cors({
     "https://appsiembralavictoria.web.app",
     process.env.FRONTEND_URL || ""
   ],
-  methods: ["GET","POST","OPTIONS"],
+  methods: ["GET", "POST", "OPTIONS"],
   exposedHeaders: ["Content-Disposition"]
 }));
 
@@ -71,7 +71,6 @@ function extraerSeccion(row) {
   return null;
 }
 
-//--- FIX REAL: semana sí se detecta usando getTextFromCell -----
 function extraerSemana(row) {
   for (const cell of row) {
     const texto = getTextFromCell(cell);
@@ -90,7 +89,7 @@ function extraerSemana(row) {
 }
 
 //--------------------------------------
-// EXPANDIR VARIEDADES
+// EXPANSIÓN DE VARIEDADES
 //--------------------------------------
 function expandirVariedades(row) {
   const varText = row.Variedad || "";
@@ -114,9 +113,8 @@ function expandirVariedades(row) {
 
   return list.length === 0 ? [row] : list;
 }
-
 //--------------------------------------
-// RUTA: /upload-excel
+// RUTA PRINCIPAL: /upload-excel
 //--------------------------------------
 app.post("/upload-excel", upload.single("file"), async (req, res) => {
   let originalUploadPath = null;
@@ -134,7 +132,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     const ext = path.extname(originalName).toLowerCase();
 
     //--------------------------------------------
-    // SI ES PDF → convertir con el microservicio
+    // SI ES PDF → CONVERTIR CON EL MICRO SERVICIO
     //--------------------------------------------
     if (ext === ".pdf") {
       pdfPath = filePath + ".pdf";
@@ -161,7 +159,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     }
 
     //--------------------------------------------
-    // LEER XLSX Y ARMAR MATRIZ
+    // LEER XLSX Y MATRIZ COMPLETA
     //--------------------------------------------
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
@@ -178,7 +176,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     let datosLimpios = limpiarDatos(data);
 
     //--------------------------------------------
-    // PARSEO DE BLOQUES (Método A, original)
+    // PARSEO: MÉTODO B → "LADO A" / "LADO B"
     //--------------------------------------------
     const datosCrudos = [];
     let seccionActual = "N/A";
@@ -187,56 +185,61 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     for (let i = 0; i < datosLimpios.length; i++) {
       const row = datosLimpios[i];
 
+      // Semana
       const sem = extraerSemana(row);
       if (sem) {
         semanaActual = sem;
         continue;
       }
 
+      // Sección
       const sec = extraerSeccion(row);
       if (sec) {
         seccionActual = sec;
         continue;
       }
 
+      // Encabezado de bloques A/B
       const c0 = getTextFromCell(row[0]).toLowerCase();
       const c6 = getTextFromCell(row[6]).toLowerCase();
 
-      if (c0 === "nave" && c6 === "nave") {
-        const bloque = [];
+      if (c0 === "lado a" && c6 === "lado b") {
 
+        const bloqueDatos = [];
         let j = i + 1;
+
         while (j < datosLimpios.length) {
           const r = datosLimpios[j];
 
-          const nextSec = extraerSeccion(r);
-          const n0 = getTextFromCell(r[0]).toLowerCase();
-          const n6 = getTextFromCell(r[6]).toLowerCase();
+          const r0 = getTextFromCell(r[0]).toLowerCase();
+          const r6 = getTextFromCell(r[6]).toLowerCase();
+          const sec2 = extraerSeccion(r);
 
-          if (nextSec || (n0 === "nave" && n6 === "nave")) break;
+          // Nuevo bloque o nueva sección → parar
+          if (sec2 || (r0 === "lado a" && r6 === "lado b")) break;
 
-          if (r.some(x => x !== "" && x != null)) bloque.push(r);
+          if (r.some(x => x !== "" && x != null)) {
+            bloqueDatos.push(r);
+          }
           j++;
         }
 
         i = j - 1;
 
-        if (bloque.length > 0) {
-          let full = rellenarColumna(bloque, 0);
-          full = rellenarColumna(full, 6);
+        if (bloqueDatos.length > 0) {
+          let datosCompletos = rellenarColumna(bloqueDatos, 0);
+          datosCompletos = rellenarColumna(datosCompletos, 6);
 
-          //--------------------------------------------
-          // FIX MÁS IMPORTANTE:
-          // GARANTIZAR 12 COLUMNAS POR FILA
-          //--------------------------------------------
-          full = full.map(r => {
+          // FIX: normalizar 12 columnas
+          datosCompletos = datosCompletos.map(r => {
             const row = [...r];
             while (row.length < 12) row.push("");
             return row;
           });
 
+          // Procesar A/B
           let filaId = 0;
-          for (const r of full) {
+          for (const r of datosCompletos) {
             const A = {
               Seccion: seccionActual,
               Lado: "A",
@@ -246,8 +249,9 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
               Variedad: getTextFromCell(r[2]),
               Largo: getTextFromCell(r[3]),
               Fecha_Siembra: getTextFromCell(r[4]),
-              Inicio_Corte: getTextFromCell(r[5]),
+              Inicio_Corte: getTextFromCell(r[5])
             };
+
             const B = {
               Seccion: seccionActual,
               Lado: "B",
@@ -257,13 +261,13 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
               Variedad: getTextFromCell(r[8]),
               Largo: getTextFromCell(r[9]),
               Fecha_Siembra: getTextFromCell(r[10]),
-              Inicio_Corte: getTextFromCell(r[11]),
+              Inicio_Corte: getTextFromCell(r[11])
             };
 
-            // FIX: si A.Nave viene vacío, usar la última nave válida
+            // FIX: Nave A vacía → copiar anterior
             if (!A.Nave) {
-              const last = datosCrudos.length > 0 ? datosCrudos[datosCrudos.length - 1].Nave : "N/A";
-              A.Nave = last;
+              const prev = datosCrudos.length > 0 ? datosCrudos[datosCrudos.length - 1].Nave : "";
+              A.Nave = prev || "N/A";
             }
 
             datosCrudos.push(A, B);
@@ -277,91 +281,89 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     // EXPANDIR VARIEDADES
     //--------------------------------------------
     const datosFinales = datosCrudos.flatMap(expandirVariedades);
+    //--------------------------------------------
+    // GENERAR ARCHIVO XLSX FINAL
+    //--------------------------------------------
+    const reporteNombre = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
+    finalReportPath = `/tmp/${reporteNombre}`;
+
+    const wbOut = new ExcelJS.Workbook();
+    const wsOut = wbOut.addWorksheet("Reporte Siembra");
+
+    wsOut.columns = [
+      { header: "Sección", key: "Seccion", width: 10 },
+      { header: "Lado", key: "Lado", width: 6 },
+      { header: "Nave", key: "Nave", width: 10 },
+      { header: "Era", key: "Era", width: 8 },
+      { header: "Variedad", key: "Variedad", width: 25 },
+      { header: "Largo", key: "Largo", width: 8 },
+      { header: "Fecha_Siembra", key: "Fecha_Siembra", width: 15 },
+      { header: "Inicio_Corte", key: "Inicio_Corte", width: 15 }
+    ];
+
+    datosFinales.forEach(r => wsOut.addRow(r));
+
+    await wbOut.xlsx.writeFile(finalReportPath);
 
     //--------------------------------------------
-    // CREAR REPORTE
+    // GENERAR PDF (si puppeteer está disponible)
     //--------------------------------------------
-    const wbFinal = new ExcelJS.Workbook();
-    sheets.crearHojaDistribucionProductos(wbFinal, datosFinales);
-    sheets.crearHojaDisbud(wbFinal, datosFinales);
-    sheets.crearHojaGirasol(wbFinal, datosFinales);
-    sheets.crearHojaPruebaFloracion(wbFinal, datosFinales);
-    sheets.crearHojaNochesLuz(wbFinal, datosCrudos, { variedades });
+    let pdfBuffer = null;
 
-    const wantPdf = String(req.query.format || "").toLowerCase() === "pdf";
+    if (puppeteer) {
+      const html = sheets.generarHTML(datosFinales, semanaActual);
 
-    // Normalizar semana
-    const safeSemana = String(semanaActual || "NA").replace(/[\/\\]/g, "_");
-
-    if (!wantPdf) {
-      finalReportPath = `/tmp/Reporte_Siembra_${safeSemana}_${Date.now()}.xlsx`;
-      await wbFinal.xlsx.writeFile(finalReportPath);
-
-      return res.download(
-        finalReportPath,
-        `Reporte_Siembra_${safeSemana}.xlsx`,
-        () => fs.unlinkSync(finalReportPath)
-      );
-    }
-
-    //--------------------------------------------
-    // GENERAR PDF
-    //--------------------------------------------
-    if (!puppeteer) {
-      return res.status(400).json({ error: "Puppeteer no disponible." });
-    }
-
-    function sheetToHTML(sheet) {
-      const rows = [];
-      sheet.eachRow({ includeEmpty: true }, (row) => {
-        const cells = [];
-        row.eachCell({ includeEmpty: true }, (cell) => {
-          const txt = cell.value == null ? "" : String(cell.value);
-          cells.push(`<td>${txt}</td>`);
-        });
-        rows.push(`<tr>${cells.join("")}</tr>`);
+      const browser = await puppeteer.launch({
+        headless: "new",
+        args: ["--no-sandbox", "--disable-setuid-sandbox"]
       });
-      return `<h2>${sheet.name}</h2><table border="1">${rows.join("")}</table><div style="page-break-after:always"></div>`;
+
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle0" });
+
+      pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "20px", bottom: "20px" }
+      });
+
+      await browser.close();
     }
 
-    let html = "<html><body>";
-    wbFinal.eachSheet(sheet => html += sheetToHTML(sheet));
-    html += "</body></html>";
+    //--------------------------------------------
+    // RESPONDER AL FRONTEND
+    //--------------------------------------------
+    res.json({
+      ok: true,
+      semana: semanaActual,
+      registros: datosFinales.length,
+      excel: {
+        filename: reporteNombre,
+        url: finalReportPath
+      },
+      pdf: pdfBuffer ? pdfBuffer.toString("base64") : null
+    });
 
-    const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
-    await browser.close();
-
-    const outPDF = `/tmp/Reporte_Siembra_${safeSemana}_${Date.now()}.pdf`;
-    fs.writeFileSync(outPDF, pdf);
-
-    return res.sendFile(outPDF, () => fs.unlinkSync(outPDF));
-
-  } catch (err) {
-    console.error("ERROR:", err);
-    return res.status(500).json({ error: "Error procesando", detalle: String(err) });
+  } catch (error) {
+    console.error("Error general procesando la solicitud:", error);
+    res.status(500).json({ error: error.message || "Error procesando archivo" });
 
   } finally {
-    try { if (originalUploadPath) fs.unlinkSync(originalUploadPath); } catch {}
-    try { if (convertedXlsxPath) fs.unlinkSync(convertedXlsxPath); } catch {}
-    try { if (pdfPath) fs.unlinkSync(pdfPath); } catch {}
+    //--------------------------------------------
+    // LIMPIEZA DE TEMPORALES
+    //--------------------------------------------
+    try {
+      if (originalUploadPath && fs.existsSync(originalUploadPath)) fs.unlinkSync(originalUploadPath);
+      if (convertedXlsxPath && fs.existsSync(convertedXlsxPath)) fs.unlinkSync(convertedXlsxPath);
+      if (pdfPath && fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+    } catch (e) {
+      console.log("Error limpiando temporales:", e);
+    }
   }
-});
-
-//--------------------------------------
-// SPA fallback
-//--------------------------------------
-app.use((req, res, next) => {
-  const index = path.join(__dirname, "dist", "index.html");
-  if (fs.existsSync(index)) return res.sendFile(index);
-  next();
 });
 
 //--------------------------------------
 // START SERVER
 //--------------------------------------
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("🔥 Servidor corriendo en", PORT));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
