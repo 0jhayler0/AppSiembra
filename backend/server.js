@@ -7,7 +7,7 @@ const variedades = require("./variedades");
 const sheets = require("./sheets");
 
 const app = express();
-const upload = multer({ dest: path.join(__dirname, 'output', 'uploads') });
+const upload = multer({ dest: '/tmp' });
 const cors = require('cors');
 const axios = require('axios');
 
