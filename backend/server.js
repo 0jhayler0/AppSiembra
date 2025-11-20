@@ -169,19 +169,33 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     console.log("Filas leídas:", datosLimpiasCount=datosLimpios.length ? datosLimpios.length : 0);
 
     const datosCrudos = [];
-    let seccionActual = "N/A";
-    let semanaActual = "N/A";
+    let seccionActual = "NN";
+    let semanaActual = "NN";
 
     const extraerSemana = (row) => {
-      if (!Array.isArray(row)) return null;
-      for (const cell of row) {
-        if (!cell) continue;
-        const texto = String(cell).trim();
-        const match = texto.match(/Semana\s+Siembra\s+(2\d{5})/i);
-        if (match) return match[1];
-      }
-      return null;
-    };
+  if (!Array.isArray(row)) return null;
+
+  for (const cell of row) {
+    if (!cell) continue;
+
+    const texto = getTextFromCell(cell);
+
+    if (!texto) continue;
+
+    // Caso real del archivo: "Flores de la Victoria S.A.S Semana Siembra 202545 Seccion: 06"
+    let m = texto.match(/Semana\s+Siembra\s+(2\d{5})/i);
+    if (m) return m[1];
+
+    // Otros posibles formatos
+    m = texto.match(/Semana(?:\s+Siembra)?\s+(\d{1,2})\b/i);
+    if (m) return m[1];
+
+    m = texto.match(/\bSem\s+(\d{1,2})\b/i);
+    if (m) return m[1];
+  }
+
+  return null;
+};
 
     // LOG: inicio parse
     console.log("Iniciando parseo de datos (método A)...");
@@ -250,7 +264,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
 
             // Si la nave A está vacía, intentar rellenarla con la anterior (misma lógica que usabas)
             const lastNave = datosCrudos.length > 0 ? datosCrudos[datosCrudos.length - 1].Nave : "";
-            const finalANave = aNave && aNave.trim() !== "" ? aNave : (lastNave || "N/A");
+            const finalANave = aNave && aNave.trim() !== "" ? aNave : (lastNave || "NN");
 
             datosCrudos.push(
               { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: finalANave, Era: aEra, Variedad: aVar, Largo: aLargo, Fecha_Siembra: aFecha, Inicio_Corte: aInicio },
