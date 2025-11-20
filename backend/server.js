@@ -309,15 +309,18 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     // RESPONDER
     //--------------------------------------------
     res.json({
-      ok: true,
-      semana: semanaActual,
-      registros: datosFinales.length,
-      excel: {
-        filename: reporteNombre,
-        url: finalReportPath
-      },
-      pdf: pdfBuffer ? pdfBuffer.toString("base64") : null
-    });
+  ok: true,
+  semana: semanaActual,
+  registros: datosFinales.length,
+  excel: {
+    filename: reporteNombre,
+    data: excelBuffer.toString("base64") // ✅ Enviar como base64
+  },
+  pdf: pdfBuffer ? {
+    filename: `Reporte_Siembra_${semanaActual}_${Date.now()}.pdf`,
+    data: pdfBuffer.toString("base64") // ✅ Enviar como base64
+  } : null
+});
 
   } catch (error) {
     console.error("Error general procesando la solicitud:", error);

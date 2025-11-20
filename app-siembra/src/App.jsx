@@ -8,52 +8,89 @@ function App() {
   const [isDropping, setIsDropping] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const inputRef = useRef(null);
+  const [reportData, setReportData] = useState(null); // Almacenar respuesta del servidor
 
-  const downloadBlob = (blob, dispositionFallback) => {
-    const disposition = blob.headers ? (blob.headers["content-disposition"] || blob.headers["Content-Disposition"]) : null;
-    let filename = dispositionFallback || "Reporte_Siembra";
-    if (disposition) {
-      const match = /filename\*?=(?:UTF-8''?)?["']?([^;"']+)["']?/i.exec(disposition);
-      if (match && match[1]) {
-        try { filename = decodeURIComponent(match[1]); } catch (e) { filename = match[1]; }
+  const downloadBase64 = (base64String, filename) => {
+    try {
+      // Convertir base64 a blob
+      const byteCharacters = atob(base64String);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
+      const byteArray = new Uint8Array(byteNumbers);
+      
+      // Determinar el tipo MIME según la extensión
+      const mimeType = filename.endsWith('.pdf') 
+        ? 'application/pdf' 
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      
+      const blob = new Blob([byteArray], { type: mimeType });
+      
+      // Crear link de descarga
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error descargando archivo:", error);
+      alert("❌ Error al descargar el archivo");
     }
-    const url = window.URL.createObjectURL(new Blob([blob.data] || [blob]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-    setFile(null);
-    setIsProcessing(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const handleUpload = async (format = 'xlsx') => {
+  const handleUpload = async () => {
     if (!file) return alert("Selecciona o arrastra un archivo Excel primero");
+    
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       setIsProcessing(true);
 
-    const res = await axios.post(`https://app-siembra-backend.onrender.com/upload-excel`, formData, {
-      responseType: "blob",
-      headers: { "Content-Type": "multipart/form-data" },
-});
+      // Cambiar responseType a 'json' para recibir la respuesta JSON
+      const res = await axios.post(
+        `https://app-siembra-backend.onrender.com/upload-excel`, 
+        formData, 
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
 
-
-      downloadBlob({ data: res.data, headers: res.headers }, `Reporte_Siembra_.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
+      // Guardar la respuesta para descargar después
+      setReportData(res.data);
+      setIsProcessing(false);
+      
     } catch (error) {
       console.error("Error subiendo el archivo:", error);
       alert("❌ Error al generar el reporte. Revisa la consola para más detalles.");
+      setIsProcessing(false);
     }
   };
 
+  const handleDownloadExcel = () => {
+    if (!reportData || !reportData.excel) {
+      return alert("Primero debes procesar un archivo");
+    }
+    
+    // Descargar el Excel desde base64
+    downloadBase64(reportData.excel.data, reportData.excel.filename);
+  };
+
+  const handleDownloadPDF = () => {
+    if (!reportData || !reportData.pdf) {
+      return alert("El PDF no está disponible para este reporte");
+    }
+    
+    // Descargar el PDF desde base64
+    downloadBase64(reportData.pdf.data, reportData.pdf.filename);
+  };
 
   // --- DRAG & DROP ---
   const handleDragOver = (e) => {
@@ -87,9 +124,9 @@ function App() {
 
     if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
       setFile(droppedFile);
+      setReportData(null); // Resetear datos del reporte anterior
     } else {
       alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
-
     }
 
     setTimeout(() => setIsDropping(false), 300);
@@ -117,7 +154,9 @@ function App() {
         tabIndex={0}
       >
         <h1 className="title">Reportes de siembra</h1>
-        <h2 className="text">Haz click para seleccionar o arrastra un archivo de Excel o PDF para generar los reportes automáticamente</h2>
+        <h2 className="text">
+          Haz click para seleccionar o arrastra un archivo de Excel o PDF para generar los reportes automáticamente
+        </h2>
 
         <input
           ref={inputRef}
@@ -128,29 +167,69 @@ function App() {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
             const name = String(f.name).toLowerCase();
-            if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) setFile(f);
-            else alert("Solo se permiten archivos Excel o PDF (.xlsx, .xls, .pdf)");
+            if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
+              setFile(f);
+              setReportData(null); // Resetear datos del reporte anterior
+            } else {
+              alert("Solo se permiten archivos Excel o PDF (.xlsx, .xls, .pdf)");
+            }
           }}
         />
 
         <div style={{ minHeight: 40 }}>
           {file ? (
-            <p style={{ color: "#23a523", margin: 0 }}>📄 Archivo seleccionado: {file.name}</p>
+            <p style={{ color: "#23a523", margin: 0 }}>
+              📄 Archivo seleccionado: {file.name}
+            </p>
           ) : (
-            <p className="pointsAnimation" style={{ color: "#666", margin: 0, fontSize: 15, fontFamily: "monospace"}}>Esperando el archivo<span>.</span><span>.</span><span>.</span></p>
+            <p className="pointsAnimation" style={{ color: "#666", margin: 0, fontSize: 15, fontFamily: "monospace" }}>
+              Esperando el archivo<span>.</span><span>.</span><span>.</span>
+            </p>
           )}
         </div>
       </div>
-          <div className="buttons"></div>
-        <div className="buttons">
-          <button className="btn-excel" onClick={() => handleUpload('xlsx')} disabled={!file}>
-            Descargar en Excel
+
+      <div className="buttons">
+        {/* Botón para procesar el archivo */}
+        {!reportData && (
+          <button 
+            className="btn-excel" 
+            onClick={handleUpload} 
+            disabled={!file || isProcessing}
+            style={{ width: '100%', maxWidth: '400px' }}
+          >
+            {isProcessing ? 'Procesando...' : 'Procesar Archivo'}
           </button>
-          <button className="btn-pdf" onClick={() => handleUpload('pdf')} disabled={!file}>
-            Descargar en PDF
-          </button>
-        </div>
-        {showSuccess && <div className="toast">✅ Reporte realizado con éxito</div>} 
+        )}
+
+        {/* Botones de descarga - solo aparecen después de procesar */}
+        {reportData && (
+          <>
+            <button className="btn-excel" onClick={handleDownloadExcel}>
+              Descargar Excel
+            </button>
+            <button 
+              className="btn-pdf" 
+              onClick={handleDownloadPDF}
+              disabled={!reportData.pdf}
+            >
+              Descargar PDF
+            </button>
+            <button 
+              className="btn-excel" 
+              onClick={() => {
+                setFile(null);
+                setReportData(null);
+              }}
+              style={{ background: '#666' }}
+            >
+              Procesar otro archivo
+            </button>
+          </>
+        )}
+      </div>
+
+      {showSuccess && <div className="toast">✅ Reporte descargado con éxito</div>}
     </section>
   );
 }
