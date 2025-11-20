@@ -171,60 +171,62 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     console.log("PASO 5: Iniciando parseo de datos crudos...");
     for (let i = 0; i < datosLimpios.length; i++) {
     const row = datosLimpios[i];
+    const rowAsText = row.map(cell => getTextFromCell(cell));
 
-    // USAMOS LA NUEVA FUNCIÓN PARA EXTRAER TEXTO DE LAS CELDAS
-    const cell1_text = getTextFromCell(row[1]);
-    const cell7_text = getTextFromCell(row[7]);
-
-    const nuevaSemana = extraerSemana(row);
-    const nuevaSeccion = extraerSeccion(row);
-
-    if (nuevaSemana) {
-        semanaActual = nuevaSemana;
-    }
-
-    if (nuevaSeccion) {
-        seccionActual = nuevaSeccion;
-        console.log(`Sección actualizada a: ${seccionActual}`);
+    // 1. Buscar la semana
+    const matchSemana = rowAsText.join(' ').match(/Semana\s+Siembra\s+(2\d{5})/i);
+    if (matchSemana) {
+        semanaActual = matchSemana[1];
+        console.log(`🗓 Semana actualizada a: ${semanaActual}`);
         continue;
     }
 
-    // AHORA LA COMPARACIÓN FUNCIONARÁ
-    if (cell1_text === "Nave" && cell7_text === "Nave") {
-        console.log(`🎯 BLOQUE 'Nave' ENCONTRADO en la fila ${i + 1}. Procesando...`);
+    // 2. Buscar la sección
+    const matchSeccion = rowAsText.join(' ').match(/Seccion:\s*(\d+)/);
+    if (matchSeccion) {
+        seccionActual = matchSeccion[1];
+        console.log(`📍 Sección actualizada a: ${seccionActual}`);
+        continue;
+    }
+    
+    // 3. Identificar filas de datos (la primera celda es un número)
+    const primeraCelda = getTextFromCell(row[1]); // Usamos índice 1
+    if (primeraCelda && !isNaN(parseInt(primeraCelda))) {
         
-        const bloqueDatos = [];
-        let j = i + 1;
-        while (j < datosLimpios.length) {
-            const currentRow = datosLimpios[j];
-            const currentCell1_text = getTextFromCell(currentRow[1]);
-            const currentCell7_text = getTextFromCell(currentRow[7]);
+        // Es una fila de datos, la procesamos
+        // Lado A (índices 1 a 6)
+        const datosLadoA = {
+            Seccion: seccionActual,
+            Lado: "A",
+            Nave: getTextFromCell(row[0]) || getTextFromCell(row[1]), // A veces la nave está en la primera celda vacía
+            Era: getTextFromCell(row[1]),
+            Variedad: getTextFromCell(row[2]),
+            Largo: getTextFromCell(row[3]),
+            Fecha_Siembra: getTextFromCell(row[4]),
+            Inicio_Corte: getTextFromCell(row[5]),
+        };
 
-            if (extraerSeccion(currentRow) !== null || (currentCell1_text === "Nave" && currentCell7_text === "Nave")) break;
-            if (currentRow.some(cell => cell !== "" && cell != null)) bloqueDatos.push(currentRow);
-            j++;
+        // Lado B (índices 7 a 12)
+        const datosLadoB = {
+            Seccion: seccionActual,
+            Lado: "B",
+            Nave: getTextFromCell(row[6]),
+            Era: getTextFromCell(row[7]),
+            Variedad: getTextFromCell(row[8]),
+            Largo: getTextFromCell(row[9]),
+            Fecha_Siembra: getTextFromCell(row[10]),
+            Inicio_Corte: getTextFromCell(row[11]),
+        };
+        
+        // Usamos la función de rellenarColumna para la Nave
+        if (datosLadoA.Nave === "" || datosLadoA.Nave === null) {
+            datosLadoA.Nave = datosCrudos.length > 0 ? datosCrudos[datosCrudos.length - 1].Nave : "N/A";
         }
-        i = j - 1;
 
-        if (bloqueDatos.length > 0) {
-            console.log(`   -> Se encontraron ${bloqueDatos.length} filas de datos en este bloque.`);
-            let datosCompletos = rellenarColumna(bloqueDatos, 0);
-            datosCompletos = rellenarColumna(datosCompletos, 6);
-
-            let filaId = 0;
-            datosCompletos.forEach(r => {
-                // AQUÍ TAMBIÉN USAMOS LA FUNCIÓN POR SI HAY CELDAS CON FORMATO
-                datosCrudos.push(
-                    // Lado A (índices 1 a 6)
-                    { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: getTextFromCell(r[1]), Era: getTextFromCell(r[2]), Variedad: getTextFromCell(r[3]), Largo: getTextFromCell(r[4]), Fecha_Siembra: getTextFromCell(r[5]), Inicio_Corte: getTextFromCell(r[6]) },
-                    // Lado B (índices 7 a 12)
-                    { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: getTextFromCell(r[7]), Era: getTextFromCell(r[8]), Variedad: getTextFromCell(r[9]), Largo: getTextFromCell(r[10]), Fecha_Siembra: getTextFromCell(r[11]), Inicio_Corte: getTextFromCell(r[12]) }
-                );
-                filaId++;
-            });
-        }
+        datosCrudos.push(datosLadoA, datosLadoB);
     }
 }
+
     
     console.log(`PASO 6: Parseo completado. Total de datos crudos extraídos: ${datosCrudos.length}`);
     if (datosCrudos.length === 0) {
