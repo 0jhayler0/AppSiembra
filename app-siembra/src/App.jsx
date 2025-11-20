@@ -8,11 +8,11 @@ function App() {
   const [isDropping, setIsDropping] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [reportData, setReportData] = useState(null); // Almacenar respuesta del servidor
+  const [reportData, setReportData] = useState(null);
+  const inputRef = useRef(null);
 
   const downloadBase64 = (base64String, filename) => {
     try {
-      // Convertir base64 a blob
       const byteCharacters = atob(base64String);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -20,14 +20,11 @@ function App() {
       }
       const byteArray = new Uint8Array(byteNumbers);
       
-      // Determinar el tipo MIME según la extensión
       const mimeType = filename.endsWith('.pdf') 
         ? 'application/pdf' 
         : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       
       const blob = new Blob([byteArray], { type: mimeType });
-      
-      // Crear link de descarga
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -54,7 +51,6 @@ function App() {
     try {
       setIsProcessing(true);
 
-      // Cambiar responseType a 'json' para recibir la respuesta JSON
       const res = await axios.post(
         `https://app-siembra-backend.onrender.com/upload-excel`, 
         formData, 
@@ -63,7 +59,6 @@ function App() {
         }
       );
 
-      // Guardar la respuesta para descargar después
       setReportData(res.data);
       setIsProcessing(false);
       
@@ -78,8 +73,6 @@ function App() {
     if (!reportData || !reportData.excel) {
       return alert("Primero debes procesar un archivo");
     }
-    
-    // Descargar el Excel desde base64
     downloadBase64(reportData.excel.data, reportData.excel.filename);
   };
 
@@ -87,12 +80,9 @@ function App() {
     if (!reportData || !reportData.pdf) {
       return alert("El PDF no está disponible para este reporte");
     }
-    
-    // Descargar el PDF desde base64
     downloadBase64(reportData.pdf.data, reportData.pdf.filename);
   };
 
-  // --- DRAG & DROP ---
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -124,7 +114,7 @@ function App() {
 
     if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
       setFile(droppedFile);
-      setReportData(null); // Resetear datos del reporte anterior
+      setReportData(null);
     } else {
       alert("Solo se permiten archivos Excel o PDF(.xlsx, .xls, .pdf)");
     }
@@ -169,7 +159,7 @@ function App() {
             const name = String(f.name).toLowerCase();
             if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".pdf")) {
               setFile(f);
-              setReportData(null); // Resetear datos del reporte anterior
+              setReportData(null);
             } else {
               alert("Solo se permiten archivos Excel o PDF (.xlsx, .xls, .pdf)");
             }
@@ -190,7 +180,6 @@ function App() {
       </div>
 
       <div className="buttons">
-        {/* Botón para procesar el archivo */}
         {!reportData && (
           <button 
             className="btn-excel" 
@@ -202,7 +191,6 @@ function App() {
           </button>
         )}
 
-        {/* Botones de descarga - solo aparecen después de procesar */}
         {reportData && (
           <>
             <button className="btn-excel" onClick={handleDownloadExcel}>
