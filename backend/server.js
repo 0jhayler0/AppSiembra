@@ -11,7 +11,7 @@ const upload = multer({ dest: path.join(__dirname, 'output', 'uploads') });
 const cors = require('cors');
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', process.env.FRONTEND_URL || ''],  // Agrega la URL del frontend en producción aquí
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://appsiembralavictoria.web.app', process.env.FRONTEND_URL || ''], 
   methods: ['GET','POST','OPTIONS'],
   exposedHeaders: ['Content-Disposition']
 }));
@@ -96,7 +96,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
             const formData = new FormData();
             formData.append('file', fs.createReadStream(pdfPath));
 
-            const response = await axios.post(`${pythonServiceUrl}/convert`, formData, {
+            const response = await axios.post(`${pythonServiceUrl}/upload-excel`, formData, {
               responseType: 'stream',
               headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -273,12 +273,10 @@ const extraerSemana = (row) => {
 });
 
 // SPA fallback: enviar index.html para rutas no encontradas (después de static)
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next();
-  }
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+app.use((req, res) => {
+  res.status(404).json({ error: "Ruta inválida" });
 });
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
