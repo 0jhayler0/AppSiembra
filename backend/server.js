@@ -9,6 +9,7 @@ const sheets = require("./sheets");
 const app = express();
 const upload = multer({ dest: path.join(__dirname, 'output', 'uploads') });
 const cors = require('cors');
+const axios = require('axios');
 
 app.use(cors({
   origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://appsiembralavictoria.web.app', process.env.FRONTEND_URL || ''], 
