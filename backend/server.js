@@ -1,6 +1,5 @@
 const express = require("express");
 const multer = require("multer");
-const XLSX = require("xlsx");
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
@@ -113,9 +112,17 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
           }
         }
 
-        const workbook = XLSX.readFile(filePath);
-        const sheetName = workbook.SheetNames[0];
-        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const worksheet = workbook.getWorksheet(1);
+        const data = [];
+        worksheet.eachRow((row, rowNumber) => {
+          const rowData = [];
+          row.eachCell((cell, colNumber) => {
+            rowData.push(cell.value);
+          });
+          data.push(rowData);
+        });
 
         let datosLimpios = limpiarDatos(data);
         const datosCrudos = []; 
