@@ -212,7 +212,7 @@ const extraerSemana = (row) => {
         const wantPdf = String(req.query.format || '').toLowerCase() === 'pdf';
 
           if (!wantPdf) {
-          const outputPath = `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`;
+          const outputPath = path.join('/tmp', `Reporte_Siembra_${semanaActual}_${Date.now()}.xlsx`);
           await wbFinal.xlsx.writeFile(outputPath);
           console.log("Reporte completo generado:", outputPath);
           res.download(outputPath, `Reporte_Siembra_${semanaActual}.xlsx`, (err) => {
@@ -253,7 +253,7 @@ const extraerSemana = (row) => {
           const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
           await browser.close();
 
-          const outputPdf = `Reporte_Siembra_${semanaActual}_${Date.now()}.pdf`;
+          const outputPdf = path.join('/tmp', `Reporte_Siembra_${semanaActual}_${Date.now()}.pdf`);
           fs.writeFileSync(outputPdf, pdfBuffer);
           res.setHeader('Content-Type', 'application/pdf');
           res.setHeader('Content-Disposition', `attachment; filename="Reporte_Siembra_${semanaActual}.pdf"`);
