@@ -3,12 +3,15 @@
 Convertidor robusto de PDF a XLSX con múltiples estrategias de extracción.
 Intenta Camelot → PyMuPDF → pdfplumber con fallback automático.
 """
+
 import sys
 import os
 import re
 import time
-import pandas as pd
 import warnings
+
+# Librerías necesarias para exportar Excel
+from openpyxl import Workbook
 
 # Suprimir advertencias de dependencias opcionales
 warnings.filterwarnings('ignore')
@@ -34,14 +37,15 @@ try:
 except ImportError:
     PDFPLUMBER_AVAILABLE = False
 
+
 def normalizar_celda(celda):
     """Normaliza contenido de celda."""
     if celda is None:
         return ""
     celda_str = str(celda).strip()
-    # Eliminar saltos de línea múltiples y espacios extra
     celda_str = re.sub(r'\s+', ' ', celda_str)
     return celda_str
+
 
 def extraer_con_camelot(pdf_path):
     """Intenta extraer usando Camelot (mejor para tablas regulares)."""
@@ -51,7 +55,6 @@ def extraer_con_camelot(pdf_path):
     try:
         print("📊 Intentando extracción con Camelot...")
         
-        # Intenta con diferentes "flavors"
         for flavor in ['lattice', 'stream']:
             try:
                 tables = camelot.read_pdf(pdf_path, pages='all', flavor=flavor)
@@ -66,8 +69,9 @@ def extraer_con_camelot(pdf_path):
         print(f"   ⚠️ Camelot falló: {e}")
         return None
 
+
 def extraer_con_pymupdf(pdf_path):
-    """Intenta extraer usando PyMuPDF (muy robusto)."""
+    """Intenta extraer usando PyMuPDF."""
     if not PYMUPDF_AVAILABLE:
         return None
     
@@ -104,8 +108,9 @@ def extraer_con_pymupdf(pdf_path):
         print(f"   ⚠️ PyMuPDF falló: {e}")
         return None
 
+
 def extraer_con_pdfplumber(pdf_path):
-    """Intenta extraer usando pdfplumber (extracción mejorada)."""
+    """Intenta extraer usando pdfplumber (tabla fallback)."""
     if not PDFPLUMBER_AVAILABLE:
         return None
     
@@ -116,7 +121,6 @@ def extraer_con_pdfplumber(pdf_path):
             resultados = []
             
             for page_idx, page in enumerate(pdf.pages):
-                # Usar extract_tables() con configuración específica
                 try:
                     tables = page.extract_tables(
                         table_settings={
@@ -126,7 +130,6 @@ def extraer_con_pdfplumber(pdf_path):
                     )
                     
                     if not tables:
-                        # Fallback a estrategia más laxa
                         tables = page.extract_tables()
                     
                     if tables:
@@ -148,29 +151,29 @@ def extraer_con_pdfplumber(pdf_path):
         print(f"   ⚠️ pdfplumber falló: {e}")
         return None
 
+
 def procesar_tablas(tablas, fuente="desconocida"):
-    """Procesa tablas extraídas en formato estándar."""
+    """Procesa todas las tablas al formato estándar."""
     filas_totales = []
     bloques_count = 0
     
     for item in (tablas if isinstance(tablas, list) else []):
         bloques_count += 1
         
-        # Obtener datos según la fuente
         if hasattr(item, 'df'):  # Camelot
             datos = item.df.values.tolist()
             titulo = "Tabla extraída con Camelot"
+
         elif isinstance(item, dict) and 'datos' in item:  # PyMuPDF o pdfplumber
             datos = item['datos']
             texto = item.get('texto', '')
-            
-            # Intentar extraer título del texto
             patron = re.compile(
                 r"Flores de la Victoria S\.A\.S Semana Siembra\s+(\d+)\s+Seccion:\s*(\d+)",
                 re.IGNORECASE
             )
             match = patron.search(texto)
             titulo = match.group(0) if match else f"Tabla extraída con {fuente}"
+
         else:
             datos = item if isinstance(item, list) else []
             titulo = f"Tabla extraída con {fuente}"
@@ -180,14 +183,12 @@ def procesar_tablas(tablas, fuente="desconocida"):
         
         print(f"   📊 Bloque {bloques_count}: {len(datos)} fila(s)")
         
-        # Agregar título
         filas_totales.append([titulo] + [""] * 11)
         filas_totales.append([
             "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte",
             "Nave", "Era", "Variedad", "Largo", "Fecha Siembra", "Inicio Corte"
         ])
         
-        # Agregar datos normalizados
         for fila in datos:
             fila_norm = [normalizar_celda(c) for c in fila]
             while len(fila_norm) < 12:
@@ -197,6 +198,7 @@ def procesar_tablas(tablas, fuente="desconocida"):
         filas_totales.append([""] * 12)
     
     return filas_totales, bloques_count
+
 
 def main():
     if len(sys.argv) < 3:
@@ -217,13 +219,12 @@ def main():
     bloques_procesados = 0
     metodo_usado = ""
 
-    # Mostrar disponibilidad de motores
     print("📦 Motores disponibles:")
     print(f"   - Camelot: {'✅' if CAMELOT_AVAILABLE else '❌'}")
     print(f"   - PyMuPDF: {'✅' if PYMUPDF_AVAILABLE else '❌'}")
     print(f"   - pdfplumber: {'✅' if PDFPLUMBER_AVAILABLE else '❌'}\n")
 
-    # Estrategia 1: Camelot
+    # CAMELot
     if CAMELOT_AVAILABLE and not todas_filas:
         try:
             tablas = extraer_con_camelot(input_pdf)
@@ -234,7 +235,7 @@ def main():
         except Exception as e:
             print(f"⚠️ Camelot falló: {e}\n")
 
-    # Estrategia 2: PyMuPDF (si Camelot no funcionó)
+    # PyMuPDF
     if not todas_filas and PYMUPDF_AVAILABLE:
         try:
             tablas = extraer_con_pymupdf(input_pdf)
@@ -245,7 +246,7 @@ def main():
         except Exception as e:
             print(f"⚠️ PyMuPDF falló: {e}\n")
 
-    # Estrategia 3: pdfplumber
+    # pdfplumber
     if not todas_filas and PDFPLUMBER_AVAILABLE:
         try:
             tablas = extraer_con_pdfplumber(input_pdf)
@@ -258,26 +259,29 @@ def main():
 
     if not todas_filas:
         print("❌ No se pudieron extraer datos con ninguna estrategia.")
-        print("   Por favor, instala al menos una de estas dependencias:")
-        print("   - pip install camelot-py")
-        print("   - pip install PyMuPDF")
-        print("   - pip install pdfplumber")
+        print("   Instala al menos una de estas dependencias:")
+        print("   pip install camelot-py PyMuPDF pdfplumber")
         sys.exit(3)
 
-    # Exportar a Excel
+    # Exportar a Excel con openpyxl
     try:
-        df = pd.DataFrame(todas_filas)
-        df.to_excel(output_xlsx, index=False, header=False)
-        
+        wb = Workbook()
+        ws = wb.active
+
+        for fila in todas_filas:
+            ws.append(fila)
+
+        wb.save(output_xlsx)
+
         end_time = time.time()
         elapsed = end_time - start_time
-        
+
         print(f"🎉 Archivo generado → {output_xlsx}")
         print(f"📊 Total filas en Excel: {len(todas_filas)}")
         print(f"📦 Bloques procesados: {bloques_procesados}")
         print(f"🔧 Método utilizado: {metodo_usado}")
         print(f"⏱️ Tiempo total: {elapsed:.2f} segundos")
-        
+
         return 0
 
     except Exception as e:
@@ -285,6 +289,7 @@ def main():
         import traceback
         traceback.print_exc()
         sys.exit(4)
+
 
 if __name__ == "__main__":
     sys.exit(main())
