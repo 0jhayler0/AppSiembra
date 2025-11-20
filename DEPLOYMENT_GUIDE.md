@@ -3,9 +3,10 @@
 ## ✅ Cambios Realizados
 
 1. ✅ Creado `.gitignore` en la raíz del proyecto
-2. ✅ Creado `render.yaml` con configuración de despliegue
-3. ✅ Actualizado `backend/package.json` con script compatible con Linux
-4. ✅ Verificado que el servidor está configurado para usar `process.env.PORT`
+2. ✅ Creado `render.yaml` con configuración de despliegue usando Docker
+3. ✅ Creado `Dockerfile` para incluir Node.js y Python
+4. ✅ Actualizado `backend/package.json` con script compatible con Linux
+5. ✅ Verificado que el servidor está configurado para usar `process.env.PORT`
 
 ## 🚀 Pasos para Desplegar en Render
 
