@@ -26,6 +26,17 @@ try {
 
 // === FUNCIONES AUXILIARES =======================
 
+const getTextFromCell = (cell) => {
+  if (!cell) return "";
+  if (typeof cell === 'string' || typeof cell === 'number') {
+    return String(cell);
+  }
+  if (cell.richText && Array.isArray(cell.richText)) {
+    return cell.richText.map(part => part.text).join('');
+  }
+  return "";
+};
+
 const limpiarDatos = (data) => {
   return data
     .filter(row => row.some(cell => cell !== "" && cell != null))
@@ -145,58 +156,73 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     const extraerSemana = (row) => {
       if (!Array.isArray(row)) return null;
       for (const cell of row) {
-        if (!cell) continue;
-        const texto = String(cell).trim();
+        const texto = getTextFromCell(cell); // <-- USA LA NUEVA FUNCIÓN AQUÍ
+        if (!texto) continue;
+        
         const match = texto.match(/Semana\s+Siembra\s+(2\d{5})/i);
         if (match) {
-          console.log("🗓 Semana encontrada:", match[1], "en texto:", texto);
+          console.log("🗓 Semana encontrada:", match[1]);
           return match[1];
         }
       }
-      return null;
-    };
+  return null;
+};
 
     console.log("PASO 5: Iniciando parseo de datos crudos...");
     for (let i = 0; i < datosLimpios.length; i++) {
-        const row = datosLimpios[i];
-        const nuevaSemana = extraerSemana(row);
-        const nuevaSeccion = extraerSeccion(row);
+    const row = datosLimpios[i];
 
-        if (nuevaSemana) semanaActual = nuevaSemana;
-        if (nuevaSeccion) {
-            seccionActual = nuevaSeccion;
-            continue;
+    // USAMOS LA NUEVA FUNCIÓN PARA EXTRAER TEXTO DE LAS CELDAS
+    const cell0_text = getTextFromCell(row[0]);
+    const cell6_text = getTextFromCell(row[6]);
+
+    const nuevaSemana = extraerSemana(row);
+    const nuevaSeccion = extraerSeccion(row);
+
+    if (nuevaSemana) {
+        semanaActual = nuevaSemana;
+    }
+
+    if (nuevaSeccion) {
+        seccionActual = nuevaSeccion;
+        console.log(`Sección actualizada a: ${seccionActual}`);
+        continue;
+    }
+
+    // AHORA LA COMPARACIÓN FUNCIONARÁ
+    if (cell0_text === "Nave" && cell6_text === "Nave") {
+        console.log(`🎯 BLOQUE 'Nave' ENCONTRADO en la fila ${i + 1}. Procesando...`);
+        
+        const bloqueDatos = [];
+        let j = i + 1;
+        while (j < datosLimpios.length) {
+            const currentRow = datosLimpios[j];
+            const currentCell0_text = getTextFromCell(currentRow[0]);
+            const currentCell6_text = getTextFromCell(currentRow[6]);
+
+            if (extraerSeccion(currentRow) !== null || (currentCell0_text === "Nave" && currentCell6_text === "Nave")) break;
+            if (currentRow.some(cell => cell !== "" && cell != null)) bloqueDatos.push(currentRow);
+            j++;
         }
+        i = j - 1;
 
-        // LOG CLAVE PARA VER SI SE ENCUENTRA EL BLOQUE
-        if (row[0] === "Nave" && row[6] === "Nave") {
-            console.log(`PASO 5b: ENCONTRADO BLOQUE 'Nave' en la fila ${i + 1}. Procesando...`);
-            const bloqueDatos = [];
-            let j = i + 1;
-            while (j < datosLimpios.length) {
-                const currentRow = datosLimpios[j];
-                if (extraerSeccion(currentRow) !== null || (currentRow[0] === "Nave" && currentRow[6] === "Nave")) break;
-                if (currentRow.some(cell => cell !== "" && cell != null)) bloqueDatos.push(currentRow);
-                j++;
-            }
-            i = j - 1;
+        if (bloqueDatos.length > 0) {
+            console.log(`   -> Se encontraron ${bloqueDatos.length} filas de datos en este bloque.`);
+            let datosCompletos = rellenarColumna(bloqueDatos, 0);
+            datosCompletos = rellenarColumna(datosCompletos, 6);
 
-            if (bloqueDatos.length > 0) {
-                let datosCompletos = rellenarColumna(bloqueDatos, 0);
-                datosCompletos = rellenarColumna(datosCompletos, 6);
-                console.log(`PASO 5c: Bloque de datos procesado. Filas a añadir: ${datosCompletos.length * 2}`);
-
-                let filaId = 0;
-                datosCompletos.forEach(r => {
-                    datosCrudos.push(
-                        { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: r[0] || "", Era: r[1] || "", Variedad: r[2] || "", Largo: r[3] || "", Fecha_Siembra: r[4] || "", Inicio_Corte: r[5] || "" },
-                        { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: r[6] || "", Era: r[7] || "", Variedad: r[8] || "", Largo: r[9] || "", Fecha_Siembra: r[10] || "", Inicio_Corte: r[11] || "" }
-                    );
-                    filaId++;
-                });
-            }
+            let filaId = 0;
+            datosCompletos.forEach(r => {
+                // AQUÍ TAMBIÉN USAMOS LA FUNCIÓN POR SI HAY CELDAS CON FORMATO
+                datosCrudos.push(
+                    { Seccion: seccionActual, Lado: "A", FilaId: filaId, Nave: getTextFromCell(r[0]), Era: getTextFromCell(r[1]), Variedad: getTextFromCell(r[2]), Largo: getTextFromCell(r[3]), Fecha_Siembra: getTextFromCell(r[4]), Inicio_Corte: getTextFromCell(r[5]) },
+                    { Seccion: seccionActual, Lado: "B", FilaId: filaId, Nave: getTextFromCell(r[6]), Era: getTextFromCell(r[7]), Variedad: getTextFromCell(r[8]), Largo: getTextFromCell(r[9]), Fecha_Siembra: getTextFromCell(r[10]), Inicio_Corte: getTextFromCell(r[11]) }
+                );
+                filaId++;
+            });
         }
     }
+}
     
     console.log(`PASO 6: Parseo completado. Total de datos crudos extraídos: ${datosCrudos.length}`);
     if (datosCrudos.length === 0) {
