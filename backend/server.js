@@ -16,9 +16,6 @@ app.use(cors({
   exposedHeaders: ['Content-Disposition']
 }));
 
-// Servir archivos estáticos del frontend
-app.use(express.static(path.join(__dirname, 'dist')));
-
 
 let puppeteer = null;
 try {
@@ -88,20 +85,30 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
 
 
         if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
-          const { execFileSync } = require('child_process');
-          const py = path.join(__dirname, 'tools', 'convertidor.py');
           pdfPath = filePath + '.pdf';
           fs.renameSync(filePath, pdfPath);
           filePath = pdfPath;
           const outXlsx = filePath + '.converted.xlsx';
+
           try {
+            // Llamar al servicio Python API
+            const pythonServiceUrl = process.env.PYTHON_SERVICE_URL || 'http://localhost:5001';
+            const formData = new FormData();
+            formData.append('file', fs.createReadStream(pdfPath));
 
-            try {
-              execFileSync('python', [py, filePath, outXlsx], { stdio: 'inherit' });
-            } catch (innerErr) {
+            const response = await axios.post(`${pythonServiceUrl}/convert`, formData, {
+              responseType: 'stream',
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
 
-              execFileSync('py', [py, filePath, outXlsx], { stdio: 'inherit' });
-            }
+            // Guardar el XLSX convertido
+            const writer = fs.createWriteStream(outXlsx);
+            response.data.pipe(writer);
+
+            await new Promise((resolve, reject) => {
+              writer.on('finish', resolve);
+              writer.on('error', reject);
+            });
 
             filePath = outXlsx;
             convertedXlsxPath = outXlsx;

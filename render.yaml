@@ -2,7 +2,7 @@ services:
   - type: web
     name: appsiembra-backend
     runtime: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: PORT
@@ -11,6 +11,8 @@ services:
         value: production
       - key: FRONTEND_URL
         value: https://your-frontend-url.onrender.com
+      - key: PYTHON_SERVICE_URL
+        value: https://your-python-service-url.onrender.com
     rootDir: backend
 
   - type: web
@@ -18,3 +20,6 @@ services:
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python convertidor.py
+    envVars:
+      - key: PORT
+        value: 5001
