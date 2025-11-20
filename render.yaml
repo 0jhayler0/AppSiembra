@@ -10,16 +10,17 @@ services:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://your-frontend-url.onrender.com
+        value: https://app-siembra-jhayler.web.app
       - key: PYTHON_SERVICE_URL
-        value: https://your-python-service-url.onrender.com
+        value: https://app-siembra-python-services.onrender.com
     rootDir: backend
 
   - type: web
-    name: app-siembra-converter
+    name: app-siembra-python-services
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python convertidor.py
+    startCommand: python app.py
     envVars:
       - key: PORT
         value: 5001
+    rootDir: python-service
